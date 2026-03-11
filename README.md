@@ -275,9 +275,7 @@ type DashboardPayload = {
 - `config.CLICKHOUSE_SNAPSHOT_TABLE`: snapshot table name.
 - `config.SNAPSHOT_INTERVAL_MS`: polling interval passed to `@sha3/polymarket-snapshot`.
 - `config.DASHBOARD_STALE_AFTER_MS`: age threshold used to paint dashboard widgets as stale. Default `1000` ms.
-- `config.ENABLE_PERF_LOGS`: enables per-snapshot persistence timing logs for the write path.
 - `config.SNAPSHOT_INSERT_BATCH_MAX_SIZE`: maximum number of snapshot rows grouped into one ClickHouse insert. Default `512`.
-- `config.SNAPSHOT_INSERT_BATCH_MAX_WAIT_MS`: maximum wait before a partial snapshot batch is flushed to ClickHouse.
 - `config.SUPPORTED_ASSETS`: subscribed assets.
 - `config.SUPPORTED_WINDOWS`: subscribed windows.
 - `config.SNAPSHOT_DEDUPLICATION_TTL_MS`: duplicate cache TTL in milliseconds.

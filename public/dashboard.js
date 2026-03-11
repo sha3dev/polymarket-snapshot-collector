@@ -3,10 +3,10 @@ const dashboardMeta = document.getElementById("dashboard-meta");
 let latestDashboardPayload = null;
 let lastSuccessfulRefreshAt = null;
 let isDisconnected = false;
-const widgetStateByPair = new Map();
 const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 3, xrp: 5 };
 const STALE_AFTER_MS = 1000;
-const FRESH_AFTER_MS = 500;
+const REFRESH_INTERVAL_MS = 500;
+const REFRESH_ALIGNMENT_MS = 0;
 
 const formatAssetValue = (asset, value) => {
   if (value === null || value === undefined) {
@@ -27,15 +27,8 @@ const readClientSideSnapshotAge = (widget) => {
   const generatedAt = widget.latestSnapshot ? widget.latestSnapshot.generatedAt : null;
   return generatedAt === null ? null : Date.now() - generatedAt;
 };
-const readWidgetPairKey = (widget) => `${widget.asset}:${widget.window}`;
 const readWidgetStaleState = (widget, latestSnapshotAgeMs) => {
-  const pairKey = readWidgetPairKey(widget);
-  const wasStale = widgetStateByPair.get(pairKey) === true;
-  const shouldUseFreshAge = latestSnapshotAgeMs !== null && latestSnapshotAgeMs <= FRESH_AFTER_MS;
-  const shouldUseStaleAge = latestSnapshotAgeMs === null || latestSnapshotAgeMs > STALE_AFTER_MS;
-  const isWidgetStale = isDisconnected || shouldUseStaleAge || (wasStale && !shouldUseFreshAge);
-  widgetStateByPair.set(pairKey, isWidgetStale);
-  return isWidgetStale;
+  return isDisconnected || latestSnapshotAgeMs === null || latestSnapshotAgeMs > STALE_AFTER_MS;
 };
 
 const renderWidget = (widget) => {
@@ -97,7 +90,19 @@ const refreshDashboard = async () => {
   }
 };
 
-refreshDashboard();
-setInterval(() => {
-  void refreshDashboard();
-}, 1000);
+const readDelayUntilNextRefreshMs = () => {
+  const nowMs = Date.now();
+  const elapsedSinceAlignedRefreshMs = (((nowMs - REFRESH_ALIGNMENT_MS) % REFRESH_INTERVAL_MS) + REFRESH_INTERVAL_MS) % REFRESH_INTERVAL_MS;
+  return elapsedSinceAlignedRefreshMs === 0 ? REFRESH_INTERVAL_MS : REFRESH_INTERVAL_MS - elapsedSinceAlignedRefreshMs;
+};
+
+const scheduleAlignedRefresh = () => {
+  const delayMs = readDelayUntilNextRefreshMs();
+  window.setTimeout(async () => {
+    await refreshDashboard();
+    scheduleAlignedRefresh();
+  }, delayMs);
+};
+
+void refreshDashboard();
+scheduleAlignedRefresh();

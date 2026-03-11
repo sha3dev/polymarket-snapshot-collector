@@ -17,7 +17,6 @@ import type { SnapshotFingerprintEntry } from "./snapshot.types.ts";
  */
 
 type SnapshotDeduplicationServiceOptions = { ttlMs: number; maxKeys: number };
-type SnapshotDeduplicationDebugMetrics = { fingerprintKeyCount: number; lastCleanupAtMs: number; ttlMs: number; maxKeys: number };
 
 /**
  * @section private:attributes
@@ -118,14 +117,5 @@ export class SnapshotDeduplicationService {
       this.trimToMaxKeys();
     }
     return shouldPersist;
-  }
-
-  public readDebugMetrics(): SnapshotDeduplicationDebugMetrics {
-    const fingerprintKeyCount = this.fingerprintByKey.size;
-    const lastCleanupAtMs = this.lastCleanupAtMs;
-    const ttlMs = this.ttlMs;
-    const maxKeys = this.maxKeys;
-    const debugMetrics: SnapshotDeduplicationDebugMetrics = { fingerprintKeyCount, lastCleanupAtMs, ttlMs, maxKeys };
-    return debugMetrics;
   }
 }

@@ -269,7 +269,7 @@ test("MarketRepositoryService trusts final cached markets and refreshes non-fina
 test("SnapshotRepositoryService serializes order books on insert", async () => {
   const driverDouble = buildDriverDouble();
   const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
-  const snapshotRepositoryService = new SnapshotRepositoryService({ clickhouseClientService, maxBatchSize: 1, maxBatchWaitMs: 0 });
+  const snapshotRepositoryService = new SnapshotRepositoryService({ clickhouseClientService });
 
   await snapshotRepositoryService.insertSnapshot({
     asset: "btc",
@@ -355,55 +355,6 @@ test("SnapshotRepositoryService inserts multiple snapshots in a single batch", a
 
   assert.equal(driverDouble.inserts.length, 1);
   assert.equal(driverDouble.inserts[0]?.rows.length, 2);
-});
-
-test("SnapshotRepositoryService exposes batch debug metrics", async () => {
-  const driverDouble = buildDriverDouble();
-  const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
-  const snapshotRepositoryService = new SnapshotRepositoryService({ clickhouseClientService, maxBatchSize: 1, maxBatchWaitMs: 0 });
-
-  await snapshotRepositoryService.insertSnapshot({
-    asset: "btc",
-    window: "5m",
-    generatedAt: 1741687200000,
-    marketId: "m1",
-    marketSlug: "btc-5m",
-    marketConditionId: "c1",
-    marketStart: "2026-03-11T10:00:00.000Z",
-    marketEnd: "2026-03-11T10:05:00.000Z",
-    priceToBeat: 100,
-    upAssetId: null,
-    upPrice: null,
-    upOrderBook: null,
-    upEventTs: null,
-    downAssetId: null,
-    downPrice: null,
-    downOrderBook: null,
-    downEventTs: null,
-    binancePrice: null,
-    binanceOrderBook: null,
-    binanceEventTs: null,
-    coinbasePrice: null,
-    coinbaseOrderBook: null,
-    coinbaseEventTs: null,
-    krakenPrice: null,
-    krakenOrderBook: null,
-    krakenEventTs: null,
-    okxPrice: null,
-    okxOrderBook: null,
-    okxEventTs: null,
-    chainlinkPrice: null,
-    chainlinkOrderBook: null,
-    chainlinkEventTs: null,
-  });
-
-  const debugMetrics = snapshotRepositoryService.readDebugMetrics();
-
-  assert.equal(debugMetrics.pendingInsertCount, 0);
-  assert.equal(debugMetrics.totalInsertedSnapshotCount, 1);
-  assert.equal(debugMetrics.totalFlushCount, 1);
-  assert.equal(debugMetrics.lastFlushBatchSize, 1);
-  assert.equal(debugMetrics.isFlushActive, false);
 });
 
 test("SnapshotQueryService detects duplicate canonical identities", async () => {

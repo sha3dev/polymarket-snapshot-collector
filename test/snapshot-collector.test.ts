@@ -68,7 +68,8 @@ test("SnapshotDeduplicationService keeps 5m and 15m snapshots separate", () => {
 
   assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "5m" })), true);
   assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "15m" })), true);
-  assert.equal(snapshotDeduplicationService.readDebugMetrics().fingerprintKeyCount, 2);
+  assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "5m" })), false);
+  assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "15m" })), false);
 });
 
 test("SnapshotCollectorService subscribes once and persists complete snapshots", async () => {
@@ -84,7 +85,7 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
         return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
       },
     } as never,
-    snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); }, readDebugMetrics() { return { pendingInsertCount: 0, totalInsertedSnapshotCount: 0, totalFlushCount: 0, lastFlushDurationMs: 0, lastFlushBatchSize: 0, isFlushActive: false }; } } as never,
+    snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     dashboardStateService,
     snapshotRuntime: {
@@ -117,7 +118,7 @@ test("SnapshotCollectorService skips incomplete snapshots", async () => {
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
     marketRepositoryService: { async ensureMarketStored() { return { slug: "unused", asset: "btc", window: "5m", priceToBeat: null, marketId: null, marketConditionId: null, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }; } } as never,
-    snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); }, readDebugMetrics() { return { pendingInsertCount: 0, totalInsertedSnapshotCount: 0, totalFlushCount: 0, lastFlushDurationMs: 0, lastFlushBatchSize: 0, isFlushActive: false }; } } as never,
+    snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     dashboardStateService,
     snapshotRuntime: {
@@ -137,4 +138,44 @@ test("SnapshotCollectorService skips incomplete snapshots", async () => {
   await snapshotCollectorService.stop();
 
   assert.deepEqual(storedSnapshotBatches, []);
+});
+
+test("SnapshotCollectorService updates dashboard before batch insert finishes", async () => {
+  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
+  let listener: ((snapshot: Snapshot) => void) | null = null;
+  let resolveInsert: (() => void) | undefined;
+  const insertPromise = new Promise<void>((resolve) => { resolveInsert = resolve; });
+  const snapshotCollectorService = new SnapshotCollectorService({
+    marketRepositoryService: {
+      async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
+        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+      },
+    } as never,
+    snapshotRepositoryService: { async insertSnapshots() { await insertPromise; } } as never,
+    snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
+    dashboardStateService,
+    snapshotRuntime: {
+      addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
+        listener = options.listener;
+      },
+      removeSnapshotListener() {},
+      async disconnect() {},
+    },
+  });
+
+  snapshotCollectorService.start();
+  const currentListener = listener as unknown as (snapshot: Snapshot) => void;
+  currentListener(buildSnapshot());
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+  assert.equal(dashboardStateService.readDashboard().widgets[0]?.snapshotCount, 1);
+
+  if (resolveInsert) {
+    resolveInsert();
+  }
+  await snapshotCollectorService.stop();
 });

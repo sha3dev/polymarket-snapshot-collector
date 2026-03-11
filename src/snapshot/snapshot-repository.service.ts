@@ -17,16 +17,8 @@ import type { SnapshotDuplicateRow, SnapshotStorageRow } from "./snapshot.types.
  * @section types
  */
 
-type SnapshotRepositoryServiceOptions = { clickhouseClientService: ClickhouseClientService; maxBatchSize?: number; maxBatchWaitMs?: number };
+type SnapshotRepositoryServiceOptions = { clickhouseClientService: ClickhouseClientService };
 type SnapshotInsertRow = SnapshotStorageRow & { inserted_at: string };
-type SnapshotRepositoryDebugMetrics = {
-  pendingInsertCount: number;
-  totalInsertedSnapshotCount: number;
-  totalFlushCount: number;
-  lastFlushDurationMs: number;
-  lastFlushBatchSize: number;
-  isFlushActive: boolean;
-};
 
 /**
  * @section private:properties
@@ -34,10 +26,6 @@ type SnapshotRepositoryDebugMetrics = {
 
 export class SnapshotRepositoryService {
   private readonly clickhouseClientService: ClickhouseClientService;
-  private totalInsertedSnapshotCount = 0;
-  private totalFlushCount = 0;
-  private lastFlushDurationMs = 0;
-  private lastFlushBatchSize = 0;
 
   /**
    * @section constructor
@@ -104,16 +92,8 @@ export class SnapshotRepositoryService {
   }
 
   private async insertSnapshotRows(snapshotInsertRows: readonly SnapshotInsertRow[]): Promise<void> {
-    const flushStartedAtMs = Date.now();
     try {
       await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_SNAPSHOT_TABLE, snapshotInsertRows);
-      this.totalInsertedSnapshotCount += snapshotInsertRows.length;
-      this.totalFlushCount += 1;
-      this.lastFlushDurationMs = Date.now() - flushStartedAtMs;
-      this.lastFlushBatchSize = snapshotInsertRows.length;
-      if (config.ENABLE_PERF_LOGS) {
-        LOGGER.info(`snapshot batch flushed rows=${snapshotInsertRows.length} pending_after=0 flush_ms=${this.lastFlushDurationMs}`);
-      }
     } catch (error) {
       LOGGER.error(`snapshot batch insert failed for ${snapshotInsertRows.length} row(s): ${error instanceof Error ? error.message : String(error)}`);
       throw error;
@@ -135,18 +115,6 @@ export class SnapshotRepositoryService {
 
   public async close(): Promise<void> {
     await Promise.resolve();
-  }
-
-  public readDebugMetrics(): SnapshotRepositoryDebugMetrics {
-    const debugMetrics: SnapshotRepositoryDebugMetrics = {
-      pendingInsertCount: 0,
-      totalInsertedSnapshotCount: this.totalInsertedSnapshotCount,
-      totalFlushCount: this.totalFlushCount,
-      lastFlushDurationMs: this.lastFlushDurationMs,
-      lastFlushBatchSize: this.lastFlushBatchSize,
-      isFlushActive: false,
-    };
-    return debugMetrics;
   }
 
   public async listDuplicateSnapshotsBySlug(slug: string): Promise<SnapshotDuplicateRow[]> {
