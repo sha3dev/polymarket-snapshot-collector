@@ -83,11 +83,11 @@ export class SnapshotRepositoryService {
 
   private buildInsertRow(snapshot: Snapshot): SnapshotInsertRow {
     return {
-      asset: snapshot.asset, window: snapshot.window, market_slug: snapshot.marketSlug || "", generated_at: new Date(snapshot.generatedAt).toISOString(),
-      market_id: snapshot.marketId, market_condition_id: snapshot.marketConditionId, market_start: snapshot.marketStart || new Date(0).toISOString(), market_end: snapshot.marketEnd || new Date(0).toISOString(), price_to_beat: snapshot.priceToBeat,
+      asset: snapshot.asset, window: snapshot.window, market_slug: snapshot.marketSlug || "", generated_at: new Date(snapshot.generatedAt).toISOString().replace("T", " ").replace("Z", ""),
+      market_id: snapshot.marketId, market_condition_id: snapshot.marketConditionId, market_start: new Date(snapshot.marketStart || 0).toISOString().replace("T", " ").replace("Z", ""), market_end: new Date(snapshot.marketEnd || 0).toISOString().replace("T", " ").replace("Z", ""), price_to_beat: snapshot.priceToBeat,
       ...this.buildOutcomeFields(snapshot),
       ...this.buildProviderFields(snapshot),
-      inserted_at: new Date().toISOString(),
+      inserted_at: new Date().toISOString().replace("T", " ").replace("Z", ""),
     };
   }
 

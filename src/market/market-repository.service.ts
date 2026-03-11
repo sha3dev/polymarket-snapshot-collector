@@ -82,7 +82,9 @@ export class MarketRepositoryService {
   }
 
   private buildListMarketsQuery(options: MarketLookupOptions): string {
-    const fromDateClause = options.fromDate ? ` AND market_start >= toDateTime64(${this.buildSqlStringLiteral(options.fromDate)}, 3, 'UTC')` : "";
+    const fromDateClause = options.fromDate
+      ? ` AND market_start >= toDateTime64(${this.buildSqlStringLiteral(new Date(options.fromDate).toISOString().replace("T", " ").replace("Z", ""))}, 3, 'UTC')`
+      : "";
     const query = `
       SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
@@ -101,8 +103,8 @@ export class MarketRepositoryService {
       asset: snapshot.asset,
       window: snapshot.window,
       price_to_beat: snapshot.priceToBeat,
-      market_start: snapshot.marketStart || new Date(0).toISOString(),
-      market_end: snapshot.marketEnd || new Date(0).toISOString(),
+      market_start: new Date(snapshot.marketStart || 0).toISOString().replace("T", " ").replace("Z", ""),
+      market_end: new Date(snapshot.marketEnd || 0).toISOString().replace("T", " ").replace("Z", ""),
     };
     return marketRow;
   }
@@ -116,7 +118,8 @@ export class MarketRepositoryService {
     const hasExistingMarket = existingRows.length > 0;
     if (!hasExistingMarket) {
       const marketRow = this.buildInsertMarketRow(snapshot);
-      await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_MARKET_TABLE, [{ ...marketRow, inserted_at: new Date().toISOString() }]);
+      const insertedAt = new Date().toISOString().replace("T", " ").replace("Z", "");
+      await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_MARKET_TABLE, [{ ...marketRow, inserted_at: insertedAt }]);
     }
   }
 

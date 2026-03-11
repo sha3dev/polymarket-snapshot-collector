@@ -91,6 +91,7 @@ test("MarketRepositoryService inserts market only when missing", async () => {
   await marketRepositoryService.ensureMarketStored(snapshot);
 
   assert.equal(driverDouble.inserts.length, 1);
+  assert.equal((driverDouble.inserts[0]?.rows[0] as { market_start: string }).market_start, "2026-03-11 10:00:00.000");
 });
 
 test("MarketRepositoryService quotes slug literals for ClickHouse SQL", async () => {
@@ -146,6 +147,7 @@ test("SnapshotRepositoryService serializes order books on insert", async () => {
   const insertedRow = driverDouble.inserts[0]?.rows[0] as { up_order_book: string; binance_order_book: string };
   assert.equal(typeof insertedRow.up_order_book, "string");
   assert.equal(typeof insertedRow.binance_order_book, "string");
+  assert.equal((driverDouble.inserts[0]?.rows[0] as { generated_at: string }).generated_at, "2025-03-11 10:00:00.000");
 });
 
 test("SnapshotQueryService detects duplicate canonical identities", async () => {
