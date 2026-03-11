@@ -3,18 +3,22 @@ const dashboardMeta = document.getElementById("dashboard-meta");
 let latestDashboardPayload = null;
 let lastSuccessfulRefreshAt = null;
 let isDisconnected = false;
-const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 4, xrp: 5 };
+const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 2, xrp: 4 };
+const CHAINLINK_ASSET_DECIMALS = { btc: 2, eth: 2, sol: 4, xrp: 5 };
 const STALE_AFTER_MS = 1000;
 const REFRESH_INTERVAL_MS = 500;
 const REFRESH_ALIGNMENT_MS = 0;
 
-const formatAssetValue = (asset, value) => {
+const formatValueWithAssetDecimals = (asset, value, decimalsByAsset) => {
   if (value === null || value === undefined) {
     return "—";
   }
-  const fractionDigits = ASSET_DECIMALS[asset] ?? 2;
+  const fractionDigits = decimalsByAsset[asset] ?? 2;
   return Number(value).toLocaleString("en-US", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
 };
+
+const formatAssetValue = (asset, value) => formatValueWithAssetDecimals(asset, value, ASSET_DECIMALS);
+const formatChainlinkValue = (asset, value) => formatValueWithAssetDecimals(asset, value, CHAINLINK_ASSET_DECIMALS);
 
 const formatContractValue = (value) => {
   if (value === null || value === undefined) {
@@ -49,7 +53,7 @@ const renderWidget = (widget) => {
     <div class="slug">${marketSlug}</div>
     <div class="hero">
       <div class="metric"><span>Price To Beat</span><strong>${formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.priceToBeat : null)}</strong></div>
-      <div class="metric"><span>Chainlink</span><strong>${formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.chainlinkPrice : null)}</strong></div>
+      <div class="metric"><span>Chainlink</span><strong>${formatChainlinkValue(widget.asset, latestSnapshot ? latestSnapshot.chainlinkPrice : null)}</strong></div>
     </div>
     <div class="table">
       <div><div class="row"><span>UP</span><span>${formatContractValue(latestSnapshot ? latestSnapshot.upPrice : null)}</span></div><div class="row"><span>DOWN</span><span>${formatContractValue(latestSnapshot ? latestSnapshot.downPrice : null)}</span></div><div class="row"><span>Binance</span><span>${formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.binancePrice : null)}</span></div><div class="row"><span>Coinbase</span><span>${formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.coinbasePrice : null)}</span></div></div>
