@@ -1,0 +1,42 @@
+{
+  "files": {
+    "ignoreUnknown": true,
+    "ignore": [
+      ".code-standards",
+      "ai/contract.json",
+      "src/app/service-runtime.service.ts",
+      "src/clickhouse/clickhouse-client.service.ts",
+      "src/collector/snapshot-collector.service.ts",
+      "src/http/http-server.service.ts",
+      "src/snapshot/snapshot-repository.service.ts",
+      "test/repository.test.ts",
+      "test/service-runtime.test.ts",
+      "test/snapshot-collector.test.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 160
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "arrowParentheses": "always",
+      "bracketSpacing": true
+    }
+  },
+  "json": {
+    "formatter": {
+      "enabled": true
+    }
+  }
+}
