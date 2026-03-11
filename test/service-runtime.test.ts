@@ -240,6 +240,8 @@ test("HttpServerService serves dashboard html", async () => {
   assert.match(html, /ASSET_DECIMALS/);
   assert.match(html, /renderWindowSection\("5m"/);
   assert.match(html, /renderWindowSection\("15m"/);
+  assert.match(html, /Disconnected from service/);
+  assert.match(html, /Date\.now\(\) - generatedAt/);
 
   await close(server);
 });
