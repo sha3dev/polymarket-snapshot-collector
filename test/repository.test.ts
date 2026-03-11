@@ -260,6 +260,23 @@ test("SnapshotQueryService builds dashboard widgets with up and down prices", as
   assert.equal(dashboardPayload.widgets[0]?.marketDirection, "UP");
 });
 
+test("SnapshotQueryService does not mark recent dashboard widgets as stale too aggressively", async () => {
+  const realNow = Date.now;
+  try {
+    Date.now = () => Date.parse("2026-03-11T10:00:08.000Z");
+    const marketRepositoryService = buildDashboardMarketRepositoryDouble();
+    const snapshotRepositoryService = buildDashboardSnapshotRepositoryDouble();
+    const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
+
+    const dashboardPayload = await snapshotQueryService.readDashboard();
+
+    assert.equal(dashboardPayload.widgets[0]?.latestSnapshotAgeMs, 8000);
+    assert.equal(dashboardPayload.widgets[0]?.isStale, false);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test("SnapshotQueryService reads snapshot timestamps as UTC", async () => {
   const marketRepositoryService = { async findMarketBySlug() { return DASHBOARD_MARKET_RECORD; } };
   const snapshotRepositoryService = { async listDuplicateSnapshotsBySlug() { return []; }, async listSnapshotsBySlug() { return [DASHBOARD_SNAPSHOT_ROW]; } };

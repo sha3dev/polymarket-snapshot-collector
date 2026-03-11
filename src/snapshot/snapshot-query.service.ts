@@ -191,7 +191,7 @@ export class SnapshotQueryService {
     const latestSnapshot = payload?.snapshots[payload.snapshots.length - 1] || null;
     const marketDirection = this.readDashboardMarketDirection(latestSnapshot);
     const latestSnapshotAgeMs = this.buildDashboardWidgetAge(latestSnapshot);
-    const isStale = latestSnapshotAgeMs === null || latestSnapshotAgeMs > config.SNAPSHOT_INTERVAL_MS * 4;
+    const isStale = latestSnapshotAgeMs === null || latestSnapshotAgeMs > config.DASHBOARD_STALE_AFTER_MS;
     const dashboardWidget: DashboardWidget = payload
       ? {
           asset,

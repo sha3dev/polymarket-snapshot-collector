@@ -274,6 +274,7 @@ type DashboardPayload = {
 - `config.CLICKHOUSE_MARKET_TABLE`: market table name.
 - `config.CLICKHOUSE_SNAPSHOT_TABLE`: snapshot table name.
 - `config.SNAPSHOT_INTERVAL_MS`: polling interval passed to `@sha3/polymarket-snapshot`.
+- `config.DASHBOARD_STALE_AFTER_MS`: age threshold used to paint dashboard widgets as stale.
 - `config.SUPPORTED_ASSETS`: subscribed assets.
 - `config.SUPPORTED_WINDOWS`: subscribed windows.
 - `config.SNAPSHOT_DEDUPLICATION_TTL_MS`: duplicate cache TTL in milliseconds.
