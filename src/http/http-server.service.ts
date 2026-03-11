@@ -56,15 +56,7 @@ export class HttpServerService {
 
   private readFromDate(searchParams: URLSearchParams): string | null {
     const fromDate = searchParams.get("fromDate");
-    const fromDateSnakeCase = searchParams.get("from_date");
-    let selectedFromDate: string | null = fromDate;
-    if (fromDateSnakeCase) {
-      if (fromDate && fromDate !== fromDateSnakeCase) {
-        throw new HttpRequestService(400, "invalid_request", "fromDate and from_date must match when both are provided");
-      }
-      selectedFromDate = fromDateSnakeCase;
-    }
-    return selectedFromDate;
+    return fromDate;
   }
 
   private parseAsset(searchParams: URLSearchParams): "btc" | "eth" | "sol" | "xrp" {

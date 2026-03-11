@@ -161,7 +161,7 @@ test("HttpServerService returns filtered markets", async () => {
   });
   const server = httpServerService.buildServer();
   const port = await listen(server);
-  const response = await fetch(`http://127.0.0.1:${port}/markets?asset=btc&window=5m&from_date=2026-03-11T10:00:00.000Z`);
+  const response = await fetch(`http://127.0.0.1:${port}/markets?asset=btc&window=5m&fromDate=2026-03-11T10:00:00.000Z`);
   const json = await response.json();
 
   assert.equal(response.status, 200);

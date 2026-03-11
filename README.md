@@ -106,7 +106,6 @@ Query params:
 - `asset`: required, one of `btc`, `eth`, `sol`, `xrp`
 - `window`: required, one of `5m`, `15m`
 - `fromDate`: optional ISO timestamp
-- `from_date`: optional alias for `fromDate`
 
 Example:
 
