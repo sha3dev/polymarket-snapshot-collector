@@ -29,14 +29,13 @@ type MarketRow = {
   market_end: string;
 };
 
-type ExistingMarketRow = { slug: string };
-
 /**
- * @section private:properties
+ * @section private:attributes
  */
 
 export class MarketRepositoryService {
   private readonly clickhouseClientService: ClickhouseClientService;
+  private readonly pendingPriceToBeatBackfills = new Set<string>();
 
   /**
    * @section constructor
@@ -116,12 +115,32 @@ export class MarketRepositoryService {
    */
 
   public async ensureMarketStored(snapshot: Snapshot): Promise<void> {
-    const existingRows = await this.clickhouseClientService.queryJsonRows<ExistingMarketRow>(this.buildFindMarketBySlugQuery(snapshot.marketSlug || ""));
-    const hasExistingMarket = existingRows.length > 0;
+    const existingRows = await this.clickhouseClientService.queryJsonRows<MarketRow>(this.buildFindMarketBySlugQuery(snapshot.marketSlug || ""));
+    const existingMarketRow = existingRows[0] || null;
+    const hasExistingMarket = existingMarketRow !== null;
     if (!hasExistingMarket) {
       const marketRow = this.buildInsertMarketRow(snapshot);
       const insertedAt = new Date().toISOString().replace("T", " ").replace("Z", "");
       await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_MARKET_TABLE, [{ ...marketRow, inserted_at: insertedAt }]);
+    }
+    if (
+      existingMarketRow &&
+      existingMarketRow.price_to_beat === null &&
+      snapshot.priceToBeat !== null &&
+      snapshot.priceToBeat !== undefined &&
+      !this.pendingPriceToBeatBackfills.has(existingMarketRow.slug)
+    ) {
+      this.pendingPriceToBeatBackfills.add(existingMarketRow.slug);
+      try {
+        await this.clickhouseClientService.command(`
+          ALTER TABLE ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
+          UPDATE price_to_beat = ${snapshot.priceToBeat}
+          WHERE slug = ${this.buildSqlStringLiteral(existingMarketRow.slug)} AND price_to_beat IS NULL
+        `);
+      } catch (error) {
+        this.pendingPriceToBeatBackfills.delete(existingMarketRow.slug);
+        throw error;
+      }
     }
   }
 

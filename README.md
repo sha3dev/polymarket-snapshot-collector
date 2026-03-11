@@ -17,7 +17,7 @@ curl "http://localhost:3000/markets?asset=btc&window=5m"
 ## Why
 
 - Keep Polymarket snapshot persistence in one process with one storage model.
-- Store one full snapshot row per logical timepoint instead of splitting the snapshot across multiple tables.
+- Keep market metadata in `market` and store only time-varying snapshot fields in `snapshot`.
 - Expose a simple internal API for market lists and stored snapshot playback.
 
 ## Main Capabilities
@@ -26,6 +26,7 @@ curl "http://localhost:3000/markets?asset=btc&window=5m"
 - Subscribes internally to the configured asset and window pairs.
 - Prevents duplicate writes for the same canonical snapshot identity with a short in-memory deduplication cache.
 - Fails fast when the same canonical identity is received again with a different payload.
+- Stores stable market metadata once in `market` and avoids repeating it in every snapshot row.
 - Exposes HTTP endpoints for market listing and snapshot retrieval.
 
 ## Installation

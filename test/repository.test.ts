@@ -19,11 +19,6 @@ const DASHBOARD_SNAPSHOT_ROW = {
   window: "5m",
   market_slug: "btc-5m",
   generated_at: "2026-03-11 10:00:00.000",
-  market_id: "m1",
-  market_condition_id: "c1",
-  market_start: "2026-03-11 10:00:00.000",
-  market_end: "2026-03-11 10:05:00.000",
-  price_to_beat: 100,
   up_asset_id: "u1",
   up_price: 0.55,
   up_order_book: null,
@@ -144,6 +139,62 @@ test("MarketRepositoryService inserts market only when missing", async () => {
   assert.equal((driverDouble.inserts[0]?.rows[0] as { market_start: string }).market_start, "2026-03-11 10:00:00.000");
 });
 
+test("MarketRepositoryService backfills price_to_beat once when market already exists", async () => {
+  const driverDouble = buildDriverDouble();
+  const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
+  const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
+  const snapshot: Snapshot = {
+    asset: "btc",
+    window: "5m",
+    generatedAt: 1741687200000,
+    marketId: "m1",
+    marketSlug: "btc-5m",
+    marketConditionId: "c1",
+    marketStart: "2026-03-11T10:00:00.000Z",
+    marketEnd: "2026-03-11T10:05:00.000Z",
+    priceToBeat: 100,
+    upAssetId: null,
+    upPrice: null,
+    upOrderBook: null,
+    upEventTs: null,
+    downAssetId: null,
+    downPrice: null,
+    downOrderBook: null,
+    downEventTs: null,
+    binancePrice: null,
+    binanceOrderBook: null,
+    binanceEventTs: null,
+    coinbasePrice: null,
+    coinbaseOrderBook: null,
+    coinbaseEventTs: null,
+    krakenPrice: null,
+    krakenOrderBook: null,
+    krakenEventTs: null,
+    okxPrice: null,
+    okxOrderBook: null,
+    okxEventTs: null,
+    chainlinkPrice: null,
+    chainlinkOrderBook: null,
+    chainlinkEventTs: null,
+  };
+  const findMarketBySlugQuery = `
+      SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
+      FROM default.market
+      WHERE slug = 'btc-5m'
+      ORDER BY market_start ASC
+      LIMIT 1
+    `;
+  driverDouble.queryResults.set(findMarketBySlugQuery, [{ slug: "btc-5m", market_id: "m1", market_condition_id: "c1", asset: "btc", window: "5m", price_to_beat: null, market_start: "2026-03-11 10:00:00.000", market_end: "2026-03-11 10:05:00.000" }]);
+
+  await marketRepositoryService.ensureMarketStored(snapshot);
+  await marketRepositoryService.ensureMarketStored(snapshot);
+
+  assert.equal(driverDouble.inserts.length, 0);
+  assert.equal(driverDouble.commands.length, 1);
+  assert.match(driverDouble.commands[0] || "", /ALTER TABLE default\.market/);
+  assert.match(driverDouble.commands[0] || "", /UPDATE price_to_beat = 100/);
+});
+
 test("MarketRepositoryService quotes slug literals for ClickHouse SQL", async () => {
   const driverDouble = buildDriverDouble();
   const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
@@ -258,6 +309,16 @@ test("SnapshotQueryService builds dashboard widgets with up and down prices", as
   assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.upPrice, 0.55);
   assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.downPrice, 0.45);
   assert.equal(dashboardPayload.widgets[0]?.marketDirection, "UP");
+});
+
+test("SnapshotQueryService uses market table priceToBeat for market summaries", async () => {
+  const marketRepositoryService = { async listMarkets() { return [DASHBOARD_MARKET_RECORD]; } };
+  const snapshotRepositoryService = {};
+  const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
+
+  const marketListPayload = await snapshotQueryService.listMarkets({ asset: "btc", window: "5m", fromDate: null });
+
+  assert.equal(marketListPayload.markets[0]?.priceToBeat, 100);
 });
 
 test("SnapshotQueryService does not mark recent dashboard widgets as stale too aggressively", async () => {

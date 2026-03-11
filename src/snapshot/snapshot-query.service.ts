@@ -67,9 +67,10 @@ export class SnapshotQueryService {
 
   private mapOutcomeSnapshotFields(
     snapshotRow: SnapshotStorageRow,
+    marketRecord: MarketRecord,
   ): Pick<Snapshot, "priceToBeat" | "upAssetId" | "upPrice" | "upOrderBook" | "upEventTs" | "downAssetId" | "downPrice" | "downOrderBook" | "downEventTs"> {
     const outcomeSnapshotFields = {
-      priceToBeat: snapshotRow.price_to_beat,
+      priceToBeat: marketRecord.priceToBeat,
       upAssetId: snapshotRow.up_asset_id,
       upPrice: snapshotRow.up_price,
       upOrderBook: this.parseOrderBook(snapshotRow.up_order_book) as Snapshot["upOrderBook"],
@@ -122,17 +123,17 @@ export class SnapshotQueryService {
     return providerSnapshotFields;
   }
 
-  private mapSnapshotRow(snapshotRow: SnapshotStorageRow): Snapshot {
+  private mapSnapshotRow(snapshotRow: SnapshotStorageRow, marketRecord: MarketRecord): Snapshot {
     const snapshot: Snapshot = {
-      asset: snapshotRow.asset as Snapshot["asset"],
-      window: snapshotRow.window as Snapshot["window"],
+      asset: marketRecord.asset,
+      window: marketRecord.window,
       generatedAt: this.parseClickhouseUtcDateTime(snapshotRow.generated_at).getTime(),
-      marketId: snapshotRow.market_id,
+      marketId: marketRecord.marketId,
       marketSlug: snapshotRow.market_slug,
-      marketConditionId: snapshotRow.market_condition_id,
-      marketStart: this.parseClickhouseUtcDateTime(snapshotRow.market_start).toISOString(),
-      marketEnd: this.parseClickhouseUtcDateTime(snapshotRow.market_end).toISOString(),
-      ...this.mapOutcomeSnapshotFields(snapshotRow),
+      marketConditionId: marketRecord.marketConditionId,
+      marketStart: marketRecord.marketStart,
+      marketEnd: marketRecord.marketEnd,
+      ...this.mapOutcomeSnapshotFields(snapshotRow, marketRecord),
       ...this.mapProviderSnapshotFields(snapshotRow),
     };
     return snapshot;
@@ -249,7 +250,7 @@ export class SnapshotQueryService {
       window: marketRecord.window,
       marketStart: marketRecord.marketStart,
       marketEnd: marketRecord.marketEnd,
-      snapshots: snapshotRows.map((snapshotRow) => this.mapSnapshotRow(snapshotRow)),
+      snapshots: snapshotRows.map((snapshotRow) => this.mapSnapshotRow(snapshotRow, marketRecord)),
     };
     return payload;
   }

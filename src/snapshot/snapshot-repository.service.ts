@@ -84,7 +84,6 @@ export class SnapshotRepositoryService {
   private buildInsertRow(snapshot: Snapshot): SnapshotInsertRow {
     return {
       asset: snapshot.asset, window: snapshot.window, market_slug: snapshot.marketSlug || "", generated_at: new Date(snapshot.generatedAt).toISOString().replace("T", " ").replace("Z", ""),
-      market_id: snapshot.marketId, market_condition_id: snapshot.marketConditionId, market_start: new Date(snapshot.marketStart || 0).toISOString().replace("T", " ").replace("Z", ""), market_end: new Date(snapshot.marketEnd || 0).toISOString().replace("T", " ").replace("Z", ""), price_to_beat: snapshot.priceToBeat,
       ...this.buildOutcomeFields(snapshot),
       ...this.buildProviderFields(snapshot),
       inserted_at: new Date().toISOString().replace("T", " ").replace("Z", ""),
@@ -115,7 +114,7 @@ export class SnapshotRepositoryService {
   public async listSnapshotsBySlug(slug: string): Promise<SnapshotStorageRow[]> {
     const query = `
       SELECT
-        asset, window, market_slug, generated_at, market_id, market_condition_id, market_start, market_end, price_to_beat,
+        asset, window, market_slug, generated_at,
         up_asset_id, up_price, up_order_book, up_event_ts,
         down_asset_id, down_price, down_order_book, down_event_ts,
         binance_price, binance_order_book, binance_event_ts,

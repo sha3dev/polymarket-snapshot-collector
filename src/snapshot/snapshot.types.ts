@@ -67,11 +67,6 @@ export type SnapshotStorageRow = {
   window: string;
   market_slug: string;
   generated_at: string;
-  market_id: string | null;
-  market_condition_id: string | null;
-  market_start: string;
-  market_end: string;
-  price_to_beat: number | null;
   up_asset_id: string | null;
   up_price: number | null;
   up_order_book: string | null;
