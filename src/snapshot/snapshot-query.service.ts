@@ -60,6 +60,11 @@ export class SnapshotQueryService {
     return parsedOrderBook;
   }
 
+  private parseClickhouseUtcDateTime(value: string): Date {
+    const parsedDate = new Date(`${value.replace(" ", "T")}Z`);
+    return parsedDate;
+  }
+
   private mapOutcomeSnapshotFields(
     snapshotRow: SnapshotStorageRow,
   ): Pick<Snapshot, "priceToBeat" | "upAssetId" | "upPrice" | "upOrderBook" | "upEventTs" | "downAssetId" | "downPrice" | "downOrderBook" | "downEventTs"> {
@@ -121,12 +126,12 @@ export class SnapshotQueryService {
     const snapshot: Snapshot = {
       asset: snapshotRow.asset as Snapshot["asset"],
       window: snapshotRow.window as Snapshot["window"],
-      generatedAt: new Date(snapshotRow.generated_at).getTime(),
+      generatedAt: this.parseClickhouseUtcDateTime(snapshotRow.generated_at).getTime(),
       marketId: snapshotRow.market_id,
       marketSlug: snapshotRow.market_slug,
       marketConditionId: snapshotRow.market_condition_id,
-      marketStart: new Date(snapshotRow.market_start).toISOString(),
-      marketEnd: new Date(snapshotRow.market_end).toISOString(),
+      marketStart: this.parseClickhouseUtcDateTime(snapshotRow.market_start).toISOString(),
+      marketEnd: this.parseClickhouseUtcDateTime(snapshotRow.market_end).toISOString(),
       ...this.mapOutcomeSnapshotFields(snapshotRow),
       ...this.mapProviderSnapshotFields(snapshotRow),
     };

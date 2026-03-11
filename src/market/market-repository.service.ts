@@ -51,6 +51,8 @@ export class MarketRepositoryService {
    */
 
   private mapMarketRow(row: MarketRow): MarketRecord {
+    const marketStart = new Date(`${row.market_start.replace(" ", "T")}Z`).toISOString();
+    const marketEnd = new Date(`${row.market_end.replace(" ", "T")}Z`).toISOString();
     const marketRecord: MarketRecord = {
       slug: row.slug,
       marketId: row.market_id,
@@ -58,8 +60,8 @@ export class MarketRepositoryService {
       asset: row.asset as MarketRecord["asset"],
       window: row.window as MarketRecord["window"],
       priceToBeat: row.price_to_beat,
-      marketStart: new Date(row.market_start).toISOString(),
-      marketEnd: new Date(row.market_end).toISOString(),
+      marketStart,
+      marketEnd,
     };
     return marketRecord;
   }
