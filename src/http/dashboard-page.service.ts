@@ -17,6 +17,11 @@ export class DashboardPageService {
       header { display:flex; justify-content:space-between; gap:16px; align-items:end; margin-bottom:20px; }
       h1 { margin:0; font-size:28px; letter-spacing:-0.04em; }
       .meta { color:var(--muted); font-size:14px; }
+      .windows { display:grid; gap:22px; }
+      .window-section { display:grid; gap:12px; }
+      .window-header { display:flex; justify-content:space-between; align-items:end; gap:16px; padding-bottom:10px; border-bottom:2px solid #d8cfbd; }
+      .window-title { margin:0; font-size:18px; letter-spacing:0.04em; text-transform:uppercase; }
+      .window-copy { color:var(--muted); font-size:13px; }
       .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(290px, 1fr)); gap:16px; }
       .card { background:var(--panel); border:1px solid var(--line); border-left:8px solid var(--accent); border-radius:18px; padding:18px; box-shadow:0 12px 30px rgba(23,32,42,0.08); }
       .card.is-stale { border-left-color:var(--warn); }
@@ -48,12 +53,30 @@ export class DashboardPageService {
         </div>
         <div class="meta" id="dashboard-meta">Loading...</div>
       </header>
-      <section class="grid" id="dashboard-grid"></section>
+      <section class="windows" id="dashboard-grid"></section>
     </main>
     <script>
       const dashboardGrid = document.getElementById("dashboard-grid");
       const dashboardMeta = document.getElementById("dashboard-meta");
-      const formatValue = (value) => value === null || value === undefined ? "—" : String(value);
+      const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 3, xrp: 5 };
+      const formatAssetValue = (asset, value) => {
+        if (value === null || value === undefined) {
+          return "—";
+        }
+        return Number(value).toLocaleString("en-US", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: ASSET_DECIMALS[asset] ?? 2,
+        });
+      };
+      const formatContractValue = (value) => {
+        if (value === null || value === undefined) {
+          return "—";
+        }
+        return Number(value).toLocaleString("en-US", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 4,
+        });
+      };
       const formatAge = (value) => value === null ? "no snapshot" : value + " ms";
       const renderWidget = (widget) => {
         const latestSnapshot = widget.latestSnapshot;
@@ -63,19 +86,25 @@ export class DashboardPageService {
           '<div class="pair"><strong>' + widget.asset.toUpperCase() + ' / ' + widget.window + '</strong><span class="badge ' + badgeClass + '">' + widget.marketDirection + '</span></div>' +
           '<div class="slug">' + (widget.market ? widget.market.slug : 'No stored market found') + '</div>' +
           '<div class="hero">' +
-            '<div class="metric"><span>Price To Beat</span><strong>' + formatValue(latestSnapshot ? latestSnapshot.priceToBeat : null) + '</strong></div>' +
-            '<div class="metric"><span>Chainlink</span><strong>' + formatValue(latestSnapshot ? latestSnapshot.chainlinkPrice : null) + '</strong></div>' +
+            '<div class="metric"><span>Price To Beat</span><strong>' + formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.priceToBeat : null) + '</strong></div>' +
+            '<div class="metric"><span>Chainlink</span><strong>' + formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.chainlinkPrice : null) + '</strong></div>' +
           '</div>' +
           '<div class="table">' +
-            '<div><div class="row"><span>UP</span><span>' + formatValue(latestSnapshot ? latestSnapshot.upPrice : null) + '</span></div><div class="row"><span>DOWN</span><span>' + formatValue(latestSnapshot ? latestSnapshot.downPrice : null) + '</span></div><div class="row"><span>Binance</span><span>' + formatValue(latestSnapshot ? latestSnapshot.binancePrice : null) + '</span></div><div class="row"><span>Coinbase</span><span>' + formatValue(latestSnapshot ? latestSnapshot.coinbasePrice : null) + '</span></div></div>' +
-            '<div><div class="row"><span>Kraken</span><span>' + formatValue(latestSnapshot ? latestSnapshot.krakenPrice : null) + '</span></div><div class="row"><span>OKX</span><span>' + formatValue(latestSnapshot ? latestSnapshot.okxPrice : null) + '</span></div><div class="row"><span>Start</span><span>' + (widget.market ? new Date(widget.market.marketStart).toLocaleTimeString() : '—') + '</span></div><div class="row"><span>End</span><span>' + (widget.market ? new Date(widget.market.marketEnd).toLocaleTimeString() : '—') + '</span></div></div>' +
+            '<div><div class="row"><span>UP</span><span>' + formatContractValue(latestSnapshot ? latestSnapshot.upPrice : null) + '</span></div><div class="row"><span>DOWN</span><span>' + formatContractValue(latestSnapshot ? latestSnapshot.downPrice : null) + '</span></div><div class="row"><span>Binance</span><span>' + formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.binancePrice : null) + '</span></div><div class="row"><span>Coinbase</span><span>' + formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.coinbasePrice : null) + '</span></div></div>' +
+            '<div><div class="row"><span>Kraken</span><span>' + formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.krakenPrice : null) + '</span></div><div class="row"><span>OKX</span><span>' + formatAssetValue(widget.asset, latestSnapshot ? latestSnapshot.okxPrice : null) + '</span></div><div class="row"><span>Start</span><span>' + (widget.market ? new Date(widget.market.marketStart).toLocaleTimeString() : '—') + '</span></div><div class="row"><span>End</span><span>' + (widget.market ? new Date(widget.market.marketEnd).toLocaleTimeString() : '—') + '</span></div></div>' +
           '</div>' +
           '<div class="footer"><span>Last snapshot age: ' + formatAge(widget.latestSnapshotAgeMs) + '</span><span>' + (widget.market ? widget.snapshotCount + ' snapshots' : '') + '</span><span>' + (latestSnapshot ? new Date(latestSnapshot.generatedAt).toLocaleTimeString() : '') + '</span></div>' +
         '</article>';
       };
+      const renderWindowSection = (windowLabel, widgets) => {
+        const copy = windowLabel === "5m" ? "Fast market checks and short-range validation." : "Longer window monitoring for slower market turnover.";
+        return '<section class="window-section"><div class="window-header"><div><h2 class="window-title">' + windowLabel + '</h2><div class="window-copy">' + copy + '</div></div><div class="window-copy">' + widgets.length + ' widgets</div></div><div class="grid">' + widgets.map(renderWidget).join('') + '</div></section>';
+      };
       const renderDashboard = (payload) => {
         dashboardMeta.textContent = 'Updated ' + new Date(payload.generatedAt).toLocaleTimeString();
-        dashboardGrid.innerHTML = payload.widgets.map(renderWidget).join('');
+        const widgets5m = payload.widgets.filter((widget) => widget.window === "5m");
+        const widgets15m = payload.widgets.filter((widget) => widget.window === "15m");
+        dashboardGrid.innerHTML = renderWindowSection("5m", widgets5m) + renderWindowSection("15m", widgets15m);
       };
       const refreshDashboard = async () => {
         const response = await fetch('/dashboard/state');

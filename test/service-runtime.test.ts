@@ -237,6 +237,9 @@ test("HttpServerService serves dashboard html", async () => {
   assert.match(html, /UP/);
   assert.match(html, /DOWN/);
   assert.match(html, /marketDirection === "UP"/);
+  assert.match(html, /ASSET_DECIMALS/);
+  assert.match(html, /renderWindowSection\("5m"/);
+  assert.match(html, /renderWindowSection\("15m"/);
 
   await close(server);
 });
