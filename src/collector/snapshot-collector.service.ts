@@ -28,6 +28,7 @@ type SnapshotCollectorServiceOptions = {
   dashboardStateService: DashboardStateService;
   snapshotRuntime: SnapshotCollectorRuntime;
 };
+type PersistedSnapshotEntry = { marketRecord: Awaited<ReturnType<MarketRepositoryService["ensureMarketStored"]>>; snapshot: Snapshot };
 
 /**
  * @section private:properties
@@ -39,9 +40,16 @@ export class SnapshotCollectorService {
   private readonly snapshotDeduplicationService: SnapshotDeduplicationService;
   private readonly dashboardStateService: DashboardStateService;
   private readonly snapshotRuntime: SnapshotCollectorRuntime;
+  private readonly maxPersistBatchSize = config.SNAPSHOT_INSERT_BATCH_MAX_SIZE;
   private isStarted = false;
   private readonly pendingSnapshots: Snapshot[] = [];
   private activeDrainPromise: Promise<void> | null = null;
+  private debugLogTimer: NodeJS.Timeout | null = null;
+  private totalReceivedSnapshotCount = 0;
+  private totalPersistedSnapshotCount = 0;
+  private totalSkippedSnapshotCount = 0;
+  private totalFailedSnapshotCount = 0;
+  private maxPendingSnapshotCount = 0;
   private readonly snapshotListener = (snapshot: Snapshot): void => {
     this.enqueueSnapshot(snapshot);
   };
@@ -79,7 +87,9 @@ export class SnapshotCollectorService {
   }
 
   private enqueueSnapshot(snapshot: Snapshot): void {
+    this.totalReceivedSnapshotCount += 1;
     this.pendingSnapshots.push(snapshot);
+    this.maxPendingSnapshotCount = Math.max(this.maxPendingSnapshotCount, this.pendingSnapshots.length);
     this.ensureDrainStarted();
   }
 
@@ -105,10 +115,8 @@ export class SnapshotCollectorService {
 
   private async drainPendingSnapshots(): Promise<void> {
     while (this.pendingSnapshots.length > 0) {
-      const pendingSnapshot = this.pendingSnapshots.shift() || null;
-      if (pendingSnapshot) {
-        await this.persistSnapshot(pendingSnapshot);
-      }
+      const snapshotBatch = this.pendingSnapshots.splice(0, this.maxPersistBatchSize);
+      await this.persistSnapshotBatch(snapshotBatch);
     }
   }
 
@@ -118,42 +126,97 @@ export class SnapshotCollectorService {
     });
   }
 
-  private logPersistencePerformance(snapshot: Snapshot, startedAtMs: number, ensureDurationMs: number, insertDurationMs: number, dashboardDurationMs: number): void {
-    if (config.ENABLE_PERF_LOGS) {
-      const totalDurationMs = Date.now() - startedAtMs;
-      LOGGER.info(
-        `snapshot persist performance asset=${snapshot.asset} window=${snapshot.window} slug=${snapshot.marketSlug || "unknown"} ensure_market_ms=${ensureDurationMs} insert_snapshot_ms=${insertDurationMs} update_dashboard_ms=${dashboardDurationMs} total_ms=${totalDurationMs}`,
-      );
+  private startDebugLogging(): void {
+    if (config.ENABLE_PERF_LOGS && !this.debugLogTimer) {
+      this.debugLogTimer = setInterval(() => {
+        this.logDebugMetrics();
+      }, 5000);
     }
   }
 
-  private async persistSnapshot(snapshot: Snapshot): Promise<void> {
-    const hasPersistableIdentity = this.hasPersistableMarketIdentity(snapshot);
-    if (!hasPersistableIdentity) {
-      LOGGER.warn(`skipping snapshot without market identity for ${snapshot.asset}/${snapshot.window} at ${snapshot.generatedAt}`);
+  private stopDebugLogging(): void {
+    if (this.debugLogTimer) {
+      clearInterval(this.debugLogTimer);
+      this.debugLogTimer = null;
     }
-    if (hasPersistableIdentity) {
-      try {
-        const shouldPersist = this.snapshotDeduplicationService.shouldPersist(snapshot);
-        if (shouldPersist) {
-          const startedAtMs = Date.now();
-          const ensureStartedAtMs = Date.now();
-          const marketRecord = await this.marketRepositoryService.ensureMarketStored(snapshot);
-          const ensureDurationMs = Date.now() - ensureStartedAtMs;
-          const insertStartedAtMs = Date.now();
-          await this.snapshotRepositoryService.insertSnapshot(snapshot);
-          const insertDurationMs = Date.now() - insertStartedAtMs;
-          const dashboardStartedAtMs = Date.now();
-          this.dashboardStateService.updateSnapshot(marketRecord, snapshot);
-          const dashboardDurationMs = Date.now() - dashboardStartedAtMs;
-          this.logPersistencePerformance(snapshot, startedAtMs, ensureDurationMs, insertDurationMs, dashboardDurationMs);
-        }
-      } catch (error) {
-        LOGGER.error(
-          `failed to persist snapshot for ${snapshot.marketSlug || "unknown"} at ${snapshot.generatedAt}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        throw error;
+  }
+
+  private logDebugMetrics(): void {
+    const repositoryMetrics = this.snapshotRepositoryService.readDebugMetrics();
+    const deduplicationMetrics = this.snapshotDeduplicationService.readDebugMetrics();
+    LOGGER.info(
+      `snapshot collector debug received=${this.totalReceivedSnapshotCount} persisted=${this.totalPersistedSnapshotCount} skipped=${this.totalSkippedSnapshotCount} failed=${this.totalFailedSnapshotCount} pending_snapshots=${this.pendingSnapshots.length} max_pending_snapshots=${this.maxPendingSnapshotCount} pending_inserts=${repositoryMetrics.pendingInsertCount} total_flushes=${repositoryMetrics.totalFlushCount} last_flush_rows=${repositoryMetrics.lastFlushBatchSize} last_flush_ms=${repositoryMetrics.lastFlushDurationMs} flush_active=${repositoryMetrics.isFlushActive} dedup_keys=${deduplicationMetrics.fingerprintKeyCount} dedup_last_cleanup_at=${deduplicationMetrics.lastCleanupAtMs}`,
+    );
+  }
+
+  private handleSkippedSnapshot(snapshot: Snapshot): void {
+    this.totalSkippedSnapshotCount += 1;
+    LOGGER.warn(`skipping snapshot without market identity for ${snapshot.asset}/${snapshot.window} at ${snapshot.generatedAt}`);
+  }
+
+  private async persistCompleteSnapshot(snapshot: Snapshot): Promise<PersistedSnapshotEntry | null> {
+    let persistedSnapshot: PersistedSnapshotEntry | null = null;
+    const shouldPersist = this.snapshotDeduplicationService.shouldPersist(snapshot);
+    if (shouldPersist) {
+      const marketRecord = await this.marketRepositoryService.ensureMarketStored(snapshot);
+      persistedSnapshot = { marketRecord, snapshot };
+    } else {
+      this.totalSkippedSnapshotCount += 1;
+    }
+    return persistedSnapshot;
+  }
+
+  private async buildPersistedSnapshotBatch(snapshotBatch: readonly Snapshot[]): Promise<PersistedSnapshotEntry[]> {
+    const persistedBatch: PersistedSnapshotEntry[] = [];
+    for (const snapshot of snapshotBatch) {
+      const hasPersistableIdentity = this.hasPersistableMarketIdentity(snapshot);
+      if (!hasPersistableIdentity) {
+        this.handleSkippedSnapshot(snapshot);
       }
+      if (hasPersistableIdentity) {
+        const persistedSnapshot = await this.persistCompleteSnapshot(snapshot);
+        if (persistedSnapshot) {
+          persistedBatch.push(persistedSnapshot);
+        }
+      }
+    }
+    return persistedBatch;
+  }
+
+  private async insertPersistedSnapshotBatch(persistedBatch: readonly PersistedSnapshotEntry[], startedAtMs: number): Promise<void> {
+    if (persistedBatch.length > 0) {
+      const ensureDurationMs = Date.now() - startedAtMs;
+      const insertStartedAtMs = Date.now();
+      await this.snapshotRepositoryService.insertSnapshots(persistedBatch.map((entry) => entry.snapshot));
+      const insertDurationMs = Date.now() - insertStartedAtMs;
+      const dashboardStartedAtMs = Date.now();
+      for (const persistedSnapshot of persistedBatch) {
+        this.dashboardStateService.updateSnapshot(persistedSnapshot.marketRecord, persistedSnapshot.snapshot);
+        this.totalPersistedSnapshotCount += 1;
+      }
+      const dashboardDurationMs = Date.now() - dashboardStartedAtMs;
+      this.logBatchPersistencePerformance(persistedBatch.length, startedAtMs, ensureDurationMs, insertDurationMs, dashboardDurationMs);
+    }
+  }
+
+  private async persistSnapshotBatch(snapshotBatch: readonly Snapshot[]): Promise<void> {
+    const startedAtMs = Date.now();
+    try {
+      const persistedBatch = await this.buildPersistedSnapshotBatch(snapshotBatch);
+      await this.insertPersistedSnapshotBatch(persistedBatch, startedAtMs);
+    } catch (error) {
+      this.totalFailedSnapshotCount += 1;
+      LOGGER.error(`failed to persist snapshot batch size=${snapshotBatch.length}: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  private logBatchPersistencePerformance(batchSize: number, startedAtMs: number, ensureDurationMs: number, insertDurationMs: number, dashboardDurationMs: number): void {
+    if (config.ENABLE_PERF_LOGS) {
+      const totalDurationMs = Date.now() - startedAtMs;
+      LOGGER.info(
+        `snapshot batch persist performance batch_size=${batchSize} ensure_market_ms=${ensureDurationMs} insert_snapshot_ms=${insertDurationMs} update_dashboard_ms=${dashboardDurationMs} total_ms=${totalDurationMs}`,
+      );
     }
   }
 
@@ -165,11 +228,13 @@ export class SnapshotCollectorService {
     if (!this.isStarted) {
       this.snapshotRuntime.addSnapshotListener({ listener: this.snapshotListener, assets: [...config.SUPPORTED_ASSETS], windows: [...config.SUPPORTED_WINDOWS] });
       this.isStarted = true;
+      this.startDebugLogging();
       LOGGER.info("snapshot collector subscribed");
     }
   }
 
   public async stop(): Promise<void> {
+    this.stopDebugLogging();
     if (this.isStarted) {
       this.snapshotRuntime.removeSnapshotListener(this.snapshotListener);
       await this.snapshotRuntime.disconnect();

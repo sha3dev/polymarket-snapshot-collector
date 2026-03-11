@@ -19,7 +19,14 @@ import type { SnapshotDuplicateRow, SnapshotStorageRow } from "./snapshot.types.
 
 type SnapshotRepositoryServiceOptions = { clickhouseClientService: ClickhouseClientService; maxBatchSize?: number; maxBatchWaitMs?: number };
 type SnapshotInsertRow = SnapshotStorageRow & { inserted_at: string };
-type PendingSnapshotInsert = { row: SnapshotInsertRow; resolve: () => void; reject: (error: unknown) => void };
+type SnapshotRepositoryDebugMetrics = {
+  pendingInsertCount: number;
+  totalInsertedSnapshotCount: number;
+  totalFlushCount: number;
+  lastFlushDurationMs: number;
+  lastFlushBatchSize: number;
+  isFlushActive: boolean;
+};
 
 /**
  * @section private:properties
@@ -27,11 +34,10 @@ type PendingSnapshotInsert = { row: SnapshotInsertRow; resolve: () => void; reje
 
 export class SnapshotRepositoryService {
   private readonly clickhouseClientService: ClickhouseClientService;
-  private readonly maxBatchSize: number;
-  private readonly maxBatchWaitMs: number;
-  private readonly pendingSnapshotInserts: PendingSnapshotInsert[] = [];
-  private activeFlushPromise: Promise<void> | null = null;
-  private flushTimer: NodeJS.Timeout | null = null;
+  private totalInsertedSnapshotCount = 0;
+  private totalFlushCount = 0;
+  private lastFlushDurationMs = 0;
+  private lastFlushBatchSize = 0;
 
   /**
    * @section constructor
@@ -39,8 +45,6 @@ export class SnapshotRepositoryService {
 
   public constructor(options: SnapshotRepositoryServiceOptions) {
     this.clickhouseClientService = options.clickhouseClientService;
-    this.maxBatchSize = options.maxBatchSize ?? config.SNAPSHOT_INSERT_BATCH_MAX_SIZE;
-    this.maxBatchWaitMs = options.maxBatchWaitMs ?? config.SNAPSHOT_INSERT_BATCH_MAX_WAIT_MS;
   }
 
   /**
@@ -99,66 +103,21 @@ export class SnapshotRepositoryService {
     };
   }
 
-  private clearFlushTimer(): void {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-  }
-
-  private readNextBatch(): PendingSnapshotInsert[] {
-    const nextBatch = this.pendingSnapshotInserts.splice(0, this.maxBatchSize);
-    return nextBatch;
-  }
-
-  private async flushPendingBatchLoop(): Promise<void> {
-    while (this.pendingSnapshotInserts.length > 0) {
-      const pendingBatch = this.readNextBatch();
-      const batchRows = pendingBatch.map((pendingInsert) => pendingInsert.row);
-      try {
-        await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_SNAPSHOT_TABLE, batchRows);
-        for (const pendingInsert of pendingBatch) {
-          pendingInsert.resolve();
-        }
-      } catch (error) {
-        LOGGER.error(`snapshot batch insert failed for ${pendingBatch.length} row(s): ${error instanceof Error ? error.message : String(error)}`);
-        for (const pendingInsert of pendingBatch) {
-          pendingInsert.reject(error);
-        }
+  private async insertSnapshotRows(snapshotInsertRows: readonly SnapshotInsertRow[]): Promise<void> {
+    const flushStartedAtMs = Date.now();
+    try {
+      await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_SNAPSHOT_TABLE, snapshotInsertRows);
+      this.totalInsertedSnapshotCount += snapshotInsertRows.length;
+      this.totalFlushCount += 1;
+      this.lastFlushDurationMs = Date.now() - flushStartedAtMs;
+      this.lastFlushBatchSize = snapshotInsertRows.length;
+      if (config.ENABLE_PERF_LOGS) {
+        LOGGER.info(`snapshot batch flushed rows=${snapshotInsertRows.length} pending_after=0 flush_ms=${this.lastFlushDurationMs}`);
       }
+    } catch (error) {
+      LOGGER.error(`snapshot batch insert failed for ${snapshotInsertRows.length} row(s): ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
-  }
-
-  private async flushPendingBatch(): Promise<void> {
-    let flushPromise = this.activeFlushPromise;
-    if (!flushPromise && this.pendingSnapshotInserts.length > 0) {
-      this.clearFlushTimer();
-      flushPromise = this.flushPendingBatchLoop()
-        .finally(() => {
-          this.activeFlushPromise = null;
-        });
-      this.activeFlushPromise = flushPromise;
-    }
-    if (flushPromise) {
-      await flushPromise;
-    }
-  }
-
-  private async queueSnapshotInsert(snapshotInsertRow: SnapshotInsertRow): Promise<void> {
-    const insertPromise = new Promise<void>((resolve, reject) => {
-      this.pendingSnapshotInserts.push({ row: snapshotInsertRow, resolve, reject });
-      const shouldFlushImmediately = this.pendingSnapshotInserts.length >= this.maxBatchSize;
-      if (shouldFlushImmediately) {
-        this.clearFlushTimer();
-        void this.flushPendingBatch();
-      }
-      if (!shouldFlushImmediately && !this.flushTimer) {
-        this.flushTimer = setTimeout(() => {
-          void this.flushPendingBatch();
-        }, this.maxBatchWaitMs);
-      }
-    });
-    return await insertPromise;
   }
 
   /**
@@ -166,13 +125,28 @@ export class SnapshotRepositoryService {
    */
 
   public async insertSnapshot(snapshot: Snapshot): Promise<void> {
-    const snapshotInsertRow = this.buildInsertRow(snapshot);
-    await this.queueSnapshotInsert(snapshotInsertRow);
+    await this.insertSnapshots([snapshot]);
+  }
+
+  public async insertSnapshots(snapshots: readonly Snapshot[]): Promise<void> {
+    const snapshotInsertRows = snapshots.map((snapshot) => this.buildInsertRow(snapshot));
+    await this.insertSnapshotRows(snapshotInsertRows);
   }
 
   public async close(): Promise<void> {
-    this.clearFlushTimer();
-    await this.flushPendingBatch();
+    await Promise.resolve();
+  }
+
+  public readDebugMetrics(): SnapshotRepositoryDebugMetrics {
+    const debugMetrics: SnapshotRepositoryDebugMetrics = {
+      pendingInsertCount: 0,
+      totalInsertedSnapshotCount: this.totalInsertedSnapshotCount,
+      totalFlushCount: this.totalFlushCount,
+      lastFlushDurationMs: this.lastFlushDurationMs,
+      lastFlushBatchSize: this.lastFlushBatchSize,
+      isFlushActive: false,
+    };
+    return debugMetrics;
   }
 
   public async listDuplicateSnapshotsBySlug(slug: string): Promise<SnapshotDuplicateRow[]> {

@@ -68,12 +68,13 @@ test("SnapshotDeduplicationService keeps 5m and 15m snapshots separate", () => {
 
   assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "5m" })), true);
   assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "15m" })), true);
+  assert.equal(snapshotDeduplicationService.readDebugMetrics().fingerprintKeyCount, 2);
 });
 
 test("SnapshotCollectorService subscribes once and persists complete snapshots", async () => {
   const addedListeners: unknown[] = [];
   const storedMarkets: string[] = [];
-  const storedSnapshots: string[] = [];
+  const storedSnapshotBatches: string[][] = [];
   const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
@@ -83,7 +84,7 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
         return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
       },
     } as never,
-    snapshotRepositoryService: { async insertSnapshot(snapshot: { marketSlug: string | null }) { storedSnapshots.push(snapshot.marketSlug || ""); } } as never,
+    snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); }, readDebugMetrics() { return { pendingInsertCount: 0, totalInsertedSnapshotCount: 0, totalFlushCount: 0, lastFlushDurationMs: 0, lastFlushBatchSize: 0, isFlushActive: false }; } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     dashboardStateService,
     snapshotRuntime: {
@@ -102,20 +103,21 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
   currentListener(buildSnapshot());
   await Promise.resolve();
   await Promise.resolve();
+  await snapshotCollectorService.stop();
 
   assert.equal(addedListeners.length, 1);
   assert.deepEqual(storedMarkets, ["btc-5m"]);
-  assert.deepEqual(storedSnapshots, ["btc-5m"]);
+  assert.deepEqual(storedSnapshotBatches, [["btc-5m"]]);
   assert.equal(dashboardStateService.readDashboard().widgets[0]?.snapshotCount, 1);
 });
 
 test("SnapshotCollectorService skips incomplete snapshots", async () => {
-  const storedSnapshots: string[] = [];
+  const storedSnapshotBatches: string[][] = [];
   const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
     marketRepositoryService: { async ensureMarketStored() { return { slug: "unused", asset: "btc", window: "5m", priceToBeat: null, marketId: null, marketConditionId: null, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }; } } as never,
-    snapshotRepositoryService: { async insertSnapshot(snapshot: { marketSlug: string | null }) { storedSnapshots.push(snapshot.marketSlug || ""); } } as never,
+    snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); }, readDebugMetrics() { return { pendingInsertCount: 0, totalInsertedSnapshotCount: 0, totalFlushCount: 0, lastFlushDurationMs: 0, lastFlushBatchSize: 0, isFlushActive: false }; } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     dashboardStateService,
     snapshotRuntime: {
@@ -132,6 +134,7 @@ test("SnapshotCollectorService skips incomplete snapshots", async () => {
   currentListener(buildSnapshot({ marketSlug: null }));
   await Promise.resolve();
   await Promise.resolve();
+  await snapshotCollectorService.stop();
 
-  assert.deepEqual(storedSnapshots, []);
+  assert.deepEqual(storedSnapshotBatches, []);
 });
