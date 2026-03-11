@@ -45,10 +45,6 @@ function buildSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return { ...BASE_SNAPSHOT, ...overrides };
 }
 
-function buildUnusedSnapshotCollectorDiagnosticService(): never {
-  return { recordListenerIngress() {}, recordQueueWait() {}, recordDashboardUpdate() {}, recordPersistence() {} } as never;
-}
-
 test("SnapshotDeduplicationService skips identical duplicate replays", () => {
   const snapshotDeduplicationService = new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 });
   const snapshot = buildSnapshot();
@@ -92,7 +88,6 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
     snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     dashboardStateService,
-    snapshotCollectorDiagnosticService: buildUnusedSnapshotCollectorDiagnosticService(),
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         addedListeners.push(options);
@@ -126,7 +121,6 @@ test("SnapshotCollectorService skips incomplete snapshots", async () => {
     snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     dashboardStateService,
-    snapshotCollectorDiagnosticService: buildUnusedSnapshotCollectorDiagnosticService(),
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         listener = options.listener;
@@ -160,7 +154,6 @@ test("SnapshotCollectorService updates dashboard before batch insert finishes", 
     snapshotRepositoryService: { async insertSnapshots() { await insertPromise; } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     dashboardStateService,
-    snapshotCollectorDiagnosticService: buildUnusedSnapshotCollectorDiagnosticService(),
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         listener = options.listener;
@@ -185,50 +178,4 @@ test("SnapshotCollectorService updates dashboard before batch insert finishes", 
     resolveInsert();
   }
   await snapshotCollectorService.stop();
-});
-
-test("SnapshotCollectorService records listener, queue, dashboard, and persistence diagnostics", async () => {
-  const recordedCalls: string[] = [];
-  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
-  let listener: ((snapshot: Snapshot) => void) | null = null;
-  const snapshotCollectorService = new SnapshotCollectorService({
-    marketRepositoryService: {
-      async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
-        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
-      },
-    } as never,
-    snapshotRepositoryService: { async insertSnapshots() {} } as never,
-    snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
-    dashboardStateService,
-    snapshotCollectorDiagnosticService: {
-      recordListenerIngress() {
-        recordedCalls.push("listener");
-      },
-      recordQueueWait() {
-        recordedCalls.push("queue");
-      },
-      recordDashboardUpdate() {
-        recordedCalls.push("dashboard");
-      },
-      recordPersistence() {
-        recordedCalls.push("persistence");
-      },
-    } as never,
-    snapshotRuntime: {
-      addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
-        listener = options.listener;
-      },
-      removeSnapshotListener() {},
-      async disconnect() {},
-    },
-  });
-
-  snapshotCollectorService.start();
-  const currentListener = listener as unknown as (snapshot: Snapshot) => void;
-  currentListener(buildSnapshot());
-  await Promise.resolve();
-  await Promise.resolve();
-  await snapshotCollectorService.stop();
-
-  assert.deepEqual(recordedCalls, ["listener", "queue", "dashboard", "persistence"]);
 });

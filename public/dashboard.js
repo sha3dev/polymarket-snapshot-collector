@@ -3,7 +3,7 @@ const dashboardMeta = document.getElementById("dashboard-meta");
 let latestDashboardPayload = null;
 let lastSuccessfulRefreshAt = null;
 let isDisconnected = false;
-const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 3, xrp: 5 };
+const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 4, xrp: 5 };
 const STALE_AFTER_MS = 1000;
 const REFRESH_INTERVAL_MS = 500;
 const REFRESH_ALIGNMENT_MS = 0;
@@ -12,7 +12,8 @@ const formatAssetValue = (asset, value) => {
   if (value === null || value === undefined) {
     return "—";
   }
-  return Number(value).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: ASSET_DECIMALS[asset] ?? 2 });
+  const fractionDigits = ASSET_DECIMALS[asset] ?? 2;
+  return Number(value).toLocaleString("en-US", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
 };
 
 const formatContractValue = (value) => {

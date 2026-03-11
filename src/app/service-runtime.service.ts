@@ -11,7 +11,6 @@ import type { Server } from "node:http";
 import { AppInfoService } from "../app-info/app-info.service.ts";
 import { ClickhouseClientService } from "../clickhouse/clickhouse-client.service.ts";
 import { ClickhouseSchemaService } from "../clickhouse/clickhouse-schema.service.ts";
-import { SnapshotCollectorDiagnosticService } from "../collector/snapshot-collector-diagnostic.service.ts";
 import { SnapshotCollectorService } from "../collector/snapshot-collector.service.ts";
 import config from "../config.ts";
 import { HttpServerService } from "../http/http-server.service.ts";
@@ -30,7 +29,6 @@ type ServiceRuntimeOptions = {
   clickhouseClientService: ClickhouseClientService;
   clickhouseSchemaService: ClickhouseSchemaService;
   snapshotRepositoryService: SnapshotRepositoryService;
-  snapshotCollectorDiagnosticService: SnapshotCollectorDiagnosticService;
   snapshotCollectorService: SnapshotCollectorService;
   httpServerService: HttpServerService;
 };
@@ -43,7 +41,6 @@ export class ServiceRuntime {
   private readonly clickhouseClientService: ClickhouseClientService;
   private readonly clickhouseSchemaService: ClickhouseSchemaService;
   private readonly snapshotRepositoryService: SnapshotRepositoryService;
-  private readonly snapshotCollectorDiagnosticService: SnapshotCollectorDiagnosticService;
   private readonly snapshotCollectorService: SnapshotCollectorService;
   private readonly httpServerService: HttpServerService;
   private activeServer: Server | null = null;
@@ -56,7 +53,6 @@ export class ServiceRuntime {
     this.clickhouseClientService = options.clickhouseClientService;
     this.clickhouseSchemaService = options.clickhouseSchemaService;
     this.snapshotRepositoryService = options.snapshotRepositoryService;
-    this.snapshotCollectorDiagnosticService = options.snapshotCollectorDiagnosticService;
     this.snapshotCollectorService = options.snapshotCollectorService;
     this.httpServerService = options.httpServerService;
   }
@@ -71,12 +67,11 @@ export class ServiceRuntime {
     const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
     const snapshotRepositoryService = new SnapshotRepositoryService({ clickhouseClientService });
     const snapshotDeduplicationService = SnapshotDeduplicationService.createDefault();
-    const snapshotCollectorDiagnosticService = SnapshotCollectorDiagnosticService.createDefault();
     const dashboardStateService = DashboardStateService.createDefault();
     const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService, snapshotRepositoryService, dashboardStateService });
-    const snapshotCollectorService = SnapshotCollectorService.createDefault({ marketRepositoryService, snapshotRepositoryService, snapshotDeduplicationService, dashboardStateService, snapshotCollectorDiagnosticService });
+    const snapshotCollectorService = SnapshotCollectorService.createDefault({ marketRepositoryService, snapshotRepositoryService, snapshotDeduplicationService, dashboardStateService });
     const httpServerService = new HttpServerService({ appInfoService: AppInfoService.createDefault(), snapshotQueryService });
-    return new ServiceRuntime({ clickhouseClientService, clickhouseSchemaService, snapshotRepositoryService, snapshotCollectorDiagnosticService, snapshotCollectorService, httpServerService });
+    return new ServiceRuntime({ clickhouseClientService, clickhouseSchemaService, snapshotRepositoryService, snapshotCollectorService, httpServerService });
   }
 
   /**
@@ -118,7 +113,6 @@ export class ServiceRuntime {
 
   public async startServer(): Promise<Server> {
     await this.clickhouseSchemaService.ensureSchema();
-    this.snapshotCollectorDiagnosticService.start();
     this.snapshotCollectorService.start();
     const server = this.buildServer();
     const listenedServer = await this.listen(server);
@@ -134,7 +128,6 @@ export class ServiceRuntime {
       this.activeServer = null;
     }
     await this.snapshotCollectorService.stop();
-    this.snapshotCollectorDiagnosticService.stop();
     await this.snapshotRepositoryService.close();
     await this.clickhouseClientService.close();
   }
