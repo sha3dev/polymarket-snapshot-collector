@@ -12,6 +12,7 @@ import type { Snapshot } from "@sha3/polymarket-snapshot";
 import config from "../config.ts";
 import LOGGER from "../logger.ts";
 import type { MarketRepositoryService } from "../market/market-repository.service.ts";
+import type { DashboardStateService } from "../snapshot/dashboard-state.service.ts";
 import type { SnapshotDeduplicationService } from "../snapshot/snapshot-deduplication.service.ts";
 import type { SnapshotRepositoryService } from "../snapshot/snapshot-repository.service.ts";
 import type { SnapshotCollectorRuntime } from "./collector.types.ts";
@@ -24,6 +25,7 @@ type SnapshotCollectorServiceOptions = {
   marketRepositoryService: MarketRepositoryService;
   snapshotRepositoryService: SnapshotRepositoryService;
   snapshotDeduplicationService: SnapshotDeduplicationService;
+  dashboardStateService: DashboardStateService;
   snapshotRuntime: SnapshotCollectorRuntime;
 };
 
@@ -35,6 +37,7 @@ export class SnapshotCollectorService {
   private readonly marketRepositoryService: MarketRepositoryService;
   private readonly snapshotRepositoryService: SnapshotRepositoryService;
   private readonly snapshotDeduplicationService: SnapshotDeduplicationService;
+  private readonly dashboardStateService: DashboardStateService;
   private readonly snapshotRuntime: SnapshotCollectorRuntime;
   private isStarted = false;
   private readonly snapshotListener = (snapshot: Snapshot): void => {
@@ -49,6 +52,7 @@ export class SnapshotCollectorService {
     this.marketRepositoryService = options.marketRepositoryService;
     this.snapshotRepositoryService = options.snapshotRepositoryService;
     this.snapshotDeduplicationService = options.snapshotDeduplicationService;
+    this.dashboardStateService = options.dashboardStateService;
     this.snapshotRuntime = options.snapshotRuntime;
   }
 
@@ -72,6 +76,15 @@ export class SnapshotCollectorService {
     return hasPersistableIdentity;
   }
 
+  private logPersistencePerformance(snapshot: Snapshot, startedAtMs: number, ensureDurationMs: number, insertDurationMs: number, dashboardDurationMs: number): void {
+    if (config.ENABLE_PERF_LOGS) {
+      const totalDurationMs = Date.now() - startedAtMs;
+      LOGGER.info(
+        `snapshot persist performance asset=${snapshot.asset} window=${snapshot.window} slug=${snapshot.marketSlug || "unknown"} ensure_market_ms=${ensureDurationMs} insert_snapshot_ms=${insertDurationMs} update_dashboard_ms=${dashboardDurationMs} total_ms=${totalDurationMs}`,
+      );
+    }
+  }
+
   private async persistSnapshot(snapshot: Snapshot): Promise<void> {
     const hasPersistableIdentity = this.hasPersistableMarketIdentity(snapshot);
     if (!hasPersistableIdentity) {
@@ -81,8 +94,17 @@ export class SnapshotCollectorService {
       try {
         const shouldPersist = this.snapshotDeduplicationService.shouldPersist(snapshot);
         if (shouldPersist) {
-          await this.marketRepositoryService.ensureMarketStored(snapshot);
+          const startedAtMs = Date.now();
+          const ensureStartedAtMs = Date.now();
+          const marketRecord = await this.marketRepositoryService.ensureMarketStored(snapshot);
+          const ensureDurationMs = Date.now() - ensureStartedAtMs;
+          const insertStartedAtMs = Date.now();
           await this.snapshotRepositoryService.insertSnapshot(snapshot);
+          const insertDurationMs = Date.now() - insertStartedAtMs;
+          const dashboardStartedAtMs = Date.now();
+          this.dashboardStateService.updateSnapshot(marketRecord, snapshot);
+          const dashboardDurationMs = Date.now() - dashboardStartedAtMs;
+          this.logPersistencePerformance(snapshot, startedAtMs, ensureDurationMs, insertDurationMs, dashboardDurationMs);
         }
       } catch (error) {
         LOGGER.error(

@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import type { Snapshot } from "@sha3/polymarket-snapshot";
 import { SnapshotCollectorService } from "../src/collector/snapshot-collector.service.ts";
+import { DashboardStateService } from "../src/snapshot/dashboard-state.service.ts";
 import { SnapshotDeduplicationService } from "../src/snapshot/snapshot-deduplication.service.ts";
 
 const BASE_SNAPSHOT: Snapshot = {
@@ -73,11 +74,18 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
   const addedListeners: unknown[] = [];
   const storedMarkets: string[] = [];
   const storedSnapshots: string[] = [];
+  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
-    marketRepositoryService: { async ensureMarketStored(snapshot: { marketSlug: string | null }) { storedMarkets.push(snapshot.marketSlug || ""); } } as never,
+    marketRepositoryService: {
+      async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
+        storedMarkets.push(snapshot.marketSlug || "");
+        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+      },
+    } as never,
     snapshotRepositoryService: { async insertSnapshot(snapshot: { marketSlug: string | null }) { storedSnapshots.push(snapshot.marketSlug || ""); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
+    dashboardStateService,
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         addedListeners.push(options);
@@ -98,15 +106,18 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
   assert.equal(addedListeners.length, 1);
   assert.deepEqual(storedMarkets, ["btc-5m"]);
   assert.deepEqual(storedSnapshots, ["btc-5m"]);
+  assert.equal(dashboardStateService.readDashboard().widgets[0]?.snapshotCount, 1);
 });
 
 test("SnapshotCollectorService skips incomplete snapshots", async () => {
   const storedSnapshots: string[] = [];
+  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
-    marketRepositoryService: { async ensureMarketStored() {} } as never,
+    marketRepositoryService: { async ensureMarketStored() { return { slug: "unused", asset: "btc", window: "5m", priceToBeat: null, marketId: null, marketConditionId: null, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }; } } as never,
     snapshotRepositoryService: { async insertSnapshot(snapshot: { marketSlug: string | null }) { storedSnapshots.push(snapshot.marketSlug || ""); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
+    dashboardStateService,
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         listener = options.listener;

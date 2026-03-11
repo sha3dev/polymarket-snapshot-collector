@@ -234,14 +234,27 @@ test("HttpServerService serves dashboard html", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /text\/html/);
   assert.match(html, /Snapshot Dashboard/);
-  assert.match(html, /UP/);
-  assert.match(html, /DOWN/);
-  assert.match(html, /marketDirection === "UP"/);
-  assert.match(html, /ASSET_DECIMALS/);
-  assert.match(html, /renderWindowSection\("5m"/);
-  assert.match(html, /renderWindowSection\("15m"/);
-  assert.match(html, /Disconnected from service/);
-  assert.match(html, /Date\.now\(\) - generatedAt/);
+  assert.match(html, /dashboard\.css/);
+  assert.match(html, /dashboard\.js/);
+
+  await close(server);
+});
+
+test("HttpServerService serves dashboard static assets", async () => {
+  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readDashboard() { return buildDashboardPayload(); } });
+  const server = httpServerService.buildServer();
+  const port = await listen(server);
+  const jsResponse = await fetch(`http://127.0.0.1:${port}/dashboard.js`);
+  const cssResponse = await fetch(`http://127.0.0.1:${port}/dashboard.css`);
+  const jsBody = await jsResponse.text();
+  const cssBody = await cssResponse.text();
+
+  assert.equal(jsResponse.status, 200);
+  assert.match(jsResponse.headers.get("content-type") || "", /javascript/);
+  assert.match(jsBody, /fetch\("\/dashboard\/state"/);
+  assert.equal(cssResponse.status, 200);
+  assert.match(cssResponse.headers.get("content-type") || "", /text\/css/);
+  assert.match(cssBody, /\.card/);
 
   await close(server);
 });

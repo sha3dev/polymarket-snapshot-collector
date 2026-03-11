@@ -16,6 +16,7 @@ import config from "../config.ts";
 import { HttpServerService } from "../http/http-server.service.ts";
 import LOGGER from "../logger.ts";
 import { MarketRepositoryService } from "../market/market-repository.service.ts";
+import { DashboardStateService } from "../snapshot/dashboard-state.service.ts";
 import { SnapshotDeduplicationService } from "../snapshot/snapshot-deduplication.service.ts";
 import { SnapshotQueryService } from "../snapshot/snapshot-query.service.ts";
 import { SnapshotRepositoryService } from "../snapshot/snapshot-repository.service.ts";
@@ -63,8 +64,9 @@ export class ServiceRuntime {
     const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
     const snapshotRepositoryService = new SnapshotRepositoryService({ clickhouseClientService });
     const snapshotDeduplicationService = SnapshotDeduplicationService.createDefault();
-    const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService, snapshotRepositoryService });
-    const snapshotCollectorService = SnapshotCollectorService.createDefault({ marketRepositoryService, snapshotRepositoryService, snapshotDeduplicationService });
+    const dashboardStateService = DashboardStateService.createDefault();
+    const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService, snapshotRepositoryService, dashboardStateService });
+    const snapshotCollectorService = SnapshotCollectorService.createDefault({ marketRepositoryService, snapshotRepositoryService, snapshotDeduplicationService, dashboardStateService });
     const httpServerService = new HttpServerService({ appInfoService: AppInfoService.createDefault(), snapshotQueryService });
     return new ServiceRuntime({ clickhouseClientService, clickhouseSchemaService, snapshotCollectorService, httpServerService });
   }

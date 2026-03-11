@@ -19,8 +19,8 @@ import { MarketNotFoundService } from "../snapshot/market-not-found.service.ts";
 import { SnapshotConsistencyService } from "../snapshot/snapshot-consistency.service.ts";
 import type { SnapshotQueryService } from "../snapshot/snapshot-query.service.ts";
 import type { DashboardPayload, MarketListPayload, MarketSnapshotsPayload } from "../snapshot/snapshot.types.ts";
-import { DashboardPageService } from "./dashboard-page.service.ts";
 import { HttpRequestService } from "./http-request.service.ts";
+import { StaticAssetService } from "./static-asset.service.ts";
 
 /**
  * @section types
@@ -38,7 +38,7 @@ type MappedError = { statusCode: number; payload: ErrorPayload };
 export class HttpServerService {
   private readonly appInfoService: AppInfoService;
   private readonly snapshotQueryService: SnapshotQueryService;
-  private readonly dashboardPageService: DashboardPageService;
+  private readonly staticAssetService: StaticAssetService;
 
   /**
    * @section constructor
@@ -47,7 +47,7 @@ export class HttpServerService {
   public constructor(options: HttpServerServiceOptions) {
     this.appInfoService = options.appInfoService;
     this.snapshotQueryService = options.snapshotQueryService;
-    this.dashboardPageService = new DashboardPageService();
+    this.staticAssetService = new StaticAssetService();
   }
 
   /**
@@ -86,14 +86,29 @@ export class HttpServerService {
     return fromDate ? new Date(fromDate).toISOString() : null;
   }
 
-  private createApplication(): Hono {
-    const application = new Hono();
-    application.get("/", (context) => context.newResponse(JSON.stringify(this.appInfoService.buildPayload()), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE }));
-    application.get("/dashboard", (context) => context.newResponse(this.dashboardPageService.renderPage(), 200 as StatusCode, { "content-type": "text/html; charset=utf-8" }));
+  private async readStaticAsset(assetName: string): Promise<{ body: string; contentType: string }> {
+    return await this.staticAssetService.readAsset(assetName);
+  }
+
+  private async createStaticAssetResponse(context: Context, assetName: string): Promise<Response> {
+    const asset = await this.readStaticAsset(assetName);
+    return context.newResponse(asset.body, 200 as StatusCode, { "content-type": asset.contentType });
+  }
+
+  private registerDashboardRoutes(application: Hono): void {
+    application.get("/dashboard", async (context) => await this.createStaticAssetResponse(context, "dashboard.html"));
+    application.get("/dashboard.js", async (context) => await this.createStaticAssetResponse(context, "dashboard.js"));
+    application.get("/dashboard.css", async (context) => await this.createStaticAssetResponse(context, "dashboard.css"));
     application.get("/dashboard/state", async (context) => {
       const payload: DashboardPayload = await this.snapshotQueryService.readDashboard();
       return context.newResponse(JSON.stringify(payload), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
     });
+  }
+
+  private createApplication(): Hono {
+    const application = new Hono();
+    application.get("/", (context) => context.newResponse(JSON.stringify(this.appInfoService.buildPayload()), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE }));
+    this.registerDashboardRoutes(application);
     application.get("/markets", async (context) => {
       const searchParams = new URL(context.req.url).searchParams;
       const asset = this.parseAsset(searchParams);

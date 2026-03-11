@@ -8,22 +8,13 @@ import type { Snapshot } from "@sha3/polymarket-snapshot";
  * @section imports:internals
  */
 
-import config from "../config.ts";
 import type { MarketRepositoryService } from "../market/market-repository.service.ts";
 import type { MarketRecord } from "../market/market.types.ts";
+import type { DashboardStateService } from "./dashboard-state.service.ts";
 import { MarketNotFoundService } from "./market-not-found.service.ts";
 import { SnapshotConsistencyService } from "./snapshot-consistency.service.ts";
 import type { SnapshotRepositoryService } from "./snapshot-repository.service.ts";
-import type {
-  DashboardMarketDirection,
-  DashboardPayload,
-  DashboardWidget,
-  DashboardWidgetSnapshot,
-  MarketListPayload,
-  MarketSnapshotsPayload,
-  MarketSummary,
-  SnapshotStorageRow,
-} from "./snapshot.types.ts";
+import type { DashboardPayload, MarketListPayload, MarketSnapshotsPayload, MarketSummary, SnapshotStorageRow } from "./snapshot.types.ts";
 
 /**
  * @section types
@@ -32,6 +23,7 @@ import type {
 type SnapshotQueryServiceOptions = {
   marketRepositoryService: MarketRepositoryService;
   snapshotRepositoryService: SnapshotRepositoryService;
+  dashboardStateService: DashboardStateService;
 };
 
 /**
@@ -41,6 +33,7 @@ type SnapshotQueryServiceOptions = {
 export class SnapshotQueryService {
   private readonly marketRepositoryService: MarketRepositoryService;
   private readonly snapshotRepositoryService: SnapshotRepositoryService;
+  private readonly dashboardStateService: DashboardStateService;
 
   /**
    * @section constructor
@@ -49,6 +42,7 @@ export class SnapshotQueryService {
   public constructor(options: SnapshotQueryServiceOptions) {
     this.marketRepositoryService = options.marketRepositoryService;
     this.snapshotRepositoryService = options.snapshotRepositoryService;
+    this.dashboardStateService = options.dashboardStateService;
   }
 
   /**
@@ -151,70 +145,6 @@ export class SnapshotQueryService {
     return marketSummary;
   }
 
-  private mapDashboardWidgetSnapshot(snapshot: Snapshot): DashboardWidgetSnapshot {
-    const dashboardWidgetSnapshot: DashboardWidgetSnapshot = {
-      generatedAt: snapshot.generatedAt,
-      priceToBeat: snapshot.priceToBeat,
-      upPrice: snapshot.upPrice,
-      downPrice: snapshot.downPrice,
-      chainlinkPrice: snapshot.chainlinkPrice,
-      binancePrice: snapshot.binancePrice,
-      coinbasePrice: snapshot.coinbasePrice,
-      krakenPrice: snapshot.krakenPrice,
-      okxPrice: snapshot.okxPrice,
-    };
-    return dashboardWidgetSnapshot;
-  }
-
-  private buildEmptyDashboardWidget(asset: MarketSummary["asset"], window: MarketSummary["window"]): DashboardWidget {
-    const marketDirection = "UNKNOWN" as const;
-    const dashboardWidget = { asset, window, market: null, snapshotCount: 0, latestSnapshot: null, marketDirection, latestSnapshotAgeMs: null, isStale: true };
-    return dashboardWidget;
-  }
-
-  private buildDashboardWidgetAge(latestSnapshot: Snapshot | null): number | null {
-    const latestSnapshotAgeMs = latestSnapshot ? Date.now() - latestSnapshot.generatedAt : null;
-    return latestSnapshotAgeMs;
-  }
-
-  private readDashboardMarketDirection(latestSnapshot: Snapshot | null): DashboardMarketDirection {
-    let marketDirection: DashboardMarketDirection = "UNKNOWN";
-    const referencePrice = latestSnapshot?.chainlinkPrice;
-    const priceToBeat = latestSnapshot?.priceToBeat;
-    const canReadDirection = referencePrice !== null && referencePrice !== undefined && priceToBeat !== null && priceToBeat !== undefined;
-    if (canReadDirection) {
-      marketDirection = referencePrice >= priceToBeat ? "UP" : "DOWN";
-    }
-    return marketDirection;
-  }
-
-  private buildDashboardWidget(asset: MarketSummary["asset"], window: MarketSummary["window"], payload: MarketSnapshotsPayload | null): DashboardWidget {
-    const latestSnapshot = payload?.snapshots[payload.snapshots.length - 1] || null;
-    const marketDirection = this.readDashboardMarketDirection(latestSnapshot);
-    const latestSnapshotAgeMs = this.buildDashboardWidgetAge(latestSnapshot);
-    const isStale = latestSnapshotAgeMs === null || latestSnapshotAgeMs > config.DASHBOARD_STALE_AFTER_MS;
-    const dashboardWidget: DashboardWidget = payload
-      ? {
-          asset,
-          window,
-          market: {
-            slug: payload.slug,
-            asset: payload.asset,
-            window: payload.window,
-            priceToBeat: latestSnapshot?.priceToBeat || null,
-            marketStart: payload.marketStart,
-            marketEnd: payload.marketEnd,
-          },
-          snapshotCount: payload.snapshots.length,
-          latestSnapshot: latestSnapshot ? this.mapDashboardWidgetSnapshot(latestSnapshot) : null,
-          marketDirection,
-          latestSnapshotAgeMs,
-          isStale,
-        }
-      : this.buildEmptyDashboardWidget(asset, window);
-    return dashboardWidget;
-  }
-
   private readMaxSnapshots(window: MarketSummary["window"]): number {
     const maxSnapshots = window === "5m" ? 600 : 1800;
     return maxSnapshots;
@@ -256,16 +186,7 @@ export class SnapshotQueryService {
   }
 
   public async readDashboard(): Promise<DashboardPayload> {
-    const widgets: DashboardWidget[] = [];
-    for (const asset of config.SUPPORTED_ASSETS) {
-      for (const window of config.SUPPORTED_WINDOWS) {
-        const marketRecords = await this.marketRepositoryService.listMarkets({ asset, window, fromDate: null });
-        const latestMarketRecord = marketRecords[marketRecords.length - 1] || null;
-        const marketSnapshotsPayload = latestMarketRecord ? await this.readMarketSnapshots(latestMarketRecord.slug) : null;
-        widgets.push(this.buildDashboardWidget(asset, window, marketSnapshotsPayload));
-      }
-    }
-    const payload: DashboardPayload = { generatedAt: new Date().toISOString(), widgets };
+    const payload = this.dashboardStateService.readDashboard();
     return payload;
   }
 }

@@ -8,12 +8,13 @@ import { ClickhouseClientService } from "../src/clickhouse/clickhouse-client.ser
 import { ClickhouseSchemaService } from "../src/clickhouse/clickhouse-schema.service.ts";
 import type { ClickhouseDriver } from "../src/clickhouse/clickhouse.types.ts";
 import { MarketRepositoryService } from "../src/market/market-repository.service.ts";
+import type { MarketRecord } from "../src/market/market.types.ts";
 import { SnapshotQueryService } from "../src/snapshot/snapshot-query.service.ts";
 import { SnapshotRepositoryService } from "../src/snapshot/snapshot-repository.service.ts";
 
 const POLYMARKET_ORDER_BOOK: OrderBook = { asks: [], bids: [] };
 const PROVIDER_ORDER_BOOK: OrderBookSnapshot = { type: "orderbook", provider: "binance", symbol: "btc", ts: 1, asks: [], bids: [] };
-const DASHBOARD_MARKET_RECORD = { slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+const DASHBOARD_MARKET_RECORD: MarketRecord = { slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
 const DASHBOARD_SNAPSHOT_ROW = {
   asset: "btc",
   window: "5m",
@@ -61,25 +62,17 @@ function buildDriverDouble() {
     },
     async query(params) {
       queries.push(params.query);
-      return { async json<T>() { return (queryResults.get(params.query) || []) as T[]; }, close() {} };
+      return {
+        async json<T>() {
+          const normalizedQuery = params.query.replace(/\s+/g, " ").trim();
+          const matchedEntry = [...queryResults.entries()].find(([query]) => query.replace(/\s+/g, " ").trim() === normalizedQuery);
+          return (matchedEntry?.[1] || []) as T[];
+        },
+        close() {},
+      };
     },
   };
   return { commands, inserts, queries, queryResults, clickhouseDriver };
-}
-
-function buildDashboardMarketRepositoryDouble() {
-  return {
-    async findMarketBySlug(slug: string) {
-      return { ...DASHBOARD_MARKET_RECORD, slug };
-    },
-    async listMarkets(options: { asset: string; window: string }) {
-      return options.asset === "btc" && options.window === "5m" ? [DASHBOARD_MARKET_RECORD] : [];
-    },
-  };
-}
-
-function buildDashboardSnapshotRepositoryDouble() {
-  return { async listDuplicateSnapshotsBySlug() { return []; }, async listSnapshotsBySlug() { return [DASHBOARD_SNAPSHOT_ROW]; } };
 }
 
 test("ClickhouseSchemaService creates market and snapshot tables", async () => {
@@ -134,8 +127,10 @@ test("MarketRepositoryService inserts market only when missing", async () => {
   };
 
   await marketRepositoryService.ensureMarketStored(snapshot);
+  await marketRepositoryService.ensureMarketStored(snapshot);
 
   assert.equal(driverDouble.inserts.length, 1);
+  assert.equal(driverDouble.queries.length, 1);
   assert.equal((driverDouble.inserts[0]?.rows[0] as { market_start: string }).market_start, "2026-03-11 10:00:00.000");
 });
 
@@ -195,16 +190,6 @@ test("MarketRepositoryService backfills price_to_beat once when market already e
   assert.match(driverDouble.commands[0] || "", /UPDATE price_to_beat = 100/);
 });
 
-test("MarketRepositoryService quotes slug literals for ClickHouse SQL", async () => {
-  const driverDouble = buildDriverDouble();
-  const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
-  const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
-
-  await marketRepositoryService.findMarketBySlug("btc-updown-5m-1773233400");
-
-  assert.match(driverDouble.queries[0] || "", /WHERE slug = 'btc-updown-5m-1773233400'/);
-});
-
 test("MarketRepositoryService reads ClickHouse datetimes as UTC", async () => {
   const driverDouble = buildDriverDouble();
   const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
@@ -222,6 +207,63 @@ test("MarketRepositoryService reads ClickHouse datetimes as UTC", async () => {
 
   assert.equal(marketRecord?.marketStart, "2026-03-11T14:10:00.000Z");
   assert.equal(marketRecord?.marketEnd, "2026-03-11T14:15:00.000Z");
+});
+
+test("MarketRepositoryService trusts final cached markets and refreshes non-final cached markets", async () => {
+  const driverDouble = buildDriverDouble();
+  const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
+  const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
+  const finalSnapshot: Snapshot = {
+    asset: "btc",
+    window: "5m",
+    generatedAt: 1741687200000,
+    marketId: "m1",
+    marketSlug: "btc-5m",
+    marketConditionId: "c1",
+    marketStart: "2026-03-11T10:00:00.000Z",
+    marketEnd: "2026-03-11T10:05:00.000Z",
+    priceToBeat: 100,
+    upAssetId: null,
+    upPrice: null,
+    upOrderBook: null,
+    upEventTs: null,
+    downAssetId: null,
+    downPrice: null,
+    downOrderBook: null,
+    downEventTs: null,
+    binancePrice: null,
+    binanceOrderBook: null,
+    binanceEventTs: null,
+    coinbasePrice: null,
+    coinbaseOrderBook: null,
+    coinbaseEventTs: null,
+    krakenPrice: null,
+    krakenOrderBook: null,
+    krakenEventTs: null,
+    okxPrice: null,
+    okxOrderBook: null,
+    okxEventTs: null,
+    chainlinkPrice: null,
+    chainlinkOrderBook: null,
+    chainlinkEventTs: null,
+  };
+  const nonFinalSnapshot = { ...finalSnapshot, marketSlug: "btc-15m", window: "15m" as const, priceToBeat: null };
+  const nonFinalQuery = `
+      SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
+      FROM default.market
+      WHERE slug = 'btc-15m'
+      ORDER BY market_start ASC
+      LIMIT 1
+    `;
+  driverDouble.queryResults.set(nonFinalQuery, [{ slug: "btc-15m", market_id: "m2", market_condition_id: "c2", asset: "btc", window: "15m", price_to_beat: 200, market_start: "2026-03-11 10:00:00.000", market_end: "2026-03-11 10:15:00.000" }]);
+
+  await marketRepositoryService.ensureMarketStored(finalSnapshot);
+  await marketRepositoryService.findMarketBySlug("btc-5m");
+  await marketRepositoryService.ensureMarketStored(nonFinalSnapshot);
+  const refreshedMarketRecord = await marketRepositoryService.findMarketBySlug("btc-15m");
+
+  assert.equal(driverDouble.queries.length, 2);
+  assert.equal(refreshedMarketRecord?.priceToBeat, 200);
 });
 
 test("SnapshotRepositoryService serializes order books on insert", async () => {
@@ -293,55 +335,37 @@ test("SnapshotQueryService detects duplicate canonical identities", async () => 
       return [];
     },
   };
-  const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
+  const snapshotQueryService = new SnapshotQueryService({
+    marketRepositoryService: marketRepositoryService as never,
+    snapshotRepositoryService: snapshotRepositoryService as never,
+    dashboardStateService: { readDashboard() { return { generatedAt: "2026-03-11T10:00:00.000Z", widgets: [] }; } } as never,
+  });
 
   await assert.rejects(() => snapshotQueryService.readMarketSnapshots("btc-5m"), /duplicate snapshot identities/);
-});
-
-test("SnapshotQueryService builds dashboard widgets with up and down prices", async () => {
-  const marketRepositoryService = buildDashboardMarketRepositoryDouble();
-  const snapshotRepositoryService = buildDashboardSnapshotRepositoryDouble();
-  const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
-
-  const dashboardPayload = await snapshotQueryService.readDashboard();
-
-  assert.equal(dashboardPayload.widgets.length > 0, true);
-  assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.upPrice, 0.55);
-  assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.downPrice, 0.45);
-  assert.equal(dashboardPayload.widgets[0]?.marketDirection, "UP");
 });
 
 test("SnapshotQueryService uses market table priceToBeat for market summaries", async () => {
   const marketRepositoryService = { async listMarkets() { return [DASHBOARD_MARKET_RECORD]; } };
   const snapshotRepositoryService = {};
-  const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
+  const snapshotQueryService = new SnapshotQueryService({
+    marketRepositoryService: marketRepositoryService as never,
+    snapshotRepositoryService: snapshotRepositoryService as never,
+    dashboardStateService: { readDashboard() { return { generatedAt: "2026-03-11T10:00:00.000Z", widgets: [] }; } } as never,
+  });
 
   const marketListPayload = await snapshotQueryService.listMarkets({ asset: "btc", window: "5m", fromDate: null });
 
   assert.equal(marketListPayload.markets[0]?.priceToBeat, 100);
 });
 
-test("SnapshotQueryService does not mark recent dashboard widgets as stale too aggressively", async () => {
-  const realNow = Date.now;
-  try {
-    Date.now = () => Date.parse("2026-03-11T10:00:08.000Z");
-    const marketRepositoryService = buildDashboardMarketRepositoryDouble();
-    const snapshotRepositoryService = buildDashboardSnapshotRepositoryDouble();
-    const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
-
-    const dashboardPayload = await snapshotQueryService.readDashboard();
-
-    assert.equal(dashboardPayload.widgets[0]?.latestSnapshotAgeMs, 8000);
-    assert.equal(dashboardPayload.widgets[0]?.isStale, false);
-  } finally {
-    Date.now = realNow;
-  }
-});
-
 test("SnapshotQueryService reads snapshot timestamps as UTC", async () => {
   const marketRepositoryService = { async findMarketBySlug() { return DASHBOARD_MARKET_RECORD; } };
   const snapshotRepositoryService = { async listDuplicateSnapshotsBySlug() { return []; }, async listSnapshotsBySlug() { return [DASHBOARD_SNAPSHOT_ROW]; } };
-  const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
+  const snapshotQueryService = new SnapshotQueryService({
+    marketRepositoryService: marketRepositoryService as never,
+    snapshotRepositoryService: snapshotRepositoryService as never,
+    dashboardStateService: { readDashboard() { return { generatedAt: "2026-03-11T10:00:00.000Z", widgets: [] }; } } as never,
+  });
 
   const marketSnapshotsPayload = await snapshotQueryService.readMarketSnapshots("btc-5m");
 
