@@ -64,8 +64,13 @@ export class MarketRepositoryService {
     return marketRecord;
   }
 
+  private buildSqlStringLiteral(value: string): string {
+    const sqlStringLiteral = `'${value.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
+    return sqlStringLiteral;
+  }
+
   private buildFindMarketBySlugQuery(slug: string): string {
-    const escapedSlug = JSON.stringify(slug);
+    const escapedSlug = this.buildSqlStringLiteral(slug);
     const query = `
       SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
@@ -77,12 +82,12 @@ export class MarketRepositoryService {
   }
 
   private buildListMarketsQuery(options: MarketLookupOptions): string {
-    const fromDateClause = options.fromDate ? ` AND market_start >= toDateTime64(${JSON.stringify(options.fromDate)}, 3, 'UTC')` : "";
+    const fromDateClause = options.fromDate ? ` AND market_start >= toDateTime64(${this.buildSqlStringLiteral(options.fromDate)}, 3, 'UTC')` : "";
     const query = `
       SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
-      WHERE asset = ${JSON.stringify(options.asset)}
-        AND window = ${JSON.stringify(options.window)}${fromDateClause}
+      WHERE asset = ${this.buildSqlStringLiteral(options.asset)}
+        AND window = ${this.buildSqlStringLiteral(options.window)}${fromDateClause}
       ORDER BY market_start ASC
     `;
     return query;

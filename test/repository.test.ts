@@ -17,6 +17,7 @@ const PROVIDER_ORDER_BOOK: OrderBookSnapshot = { type: "orderbook", provider: "b
 function buildDriverDouble() {
   const commands: string[] = [];
   const inserts: Array<{ table: string; rows: unknown[] }> = [];
+  const queries: string[] = [];
   const queryResults = new Map<string, unknown[]>();
   const clickhouseDriver: ClickhouseDriver = {
     async close() {},
@@ -29,10 +30,11 @@ function buildDriverDouble() {
       return {};
     },
     async query(params) {
+      queries.push(params.query);
       return { async json<T>() { return (queryResults.get(params.query) || []) as T[]; }, close() {} };
     },
   };
-  return { commands, inserts, queryResults, clickhouseDriver };
+  return { commands, inserts, queries, queryResults, clickhouseDriver };
 }
 
 test("ClickhouseSchemaService creates market and snapshot tables", async () => {
@@ -89,6 +91,16 @@ test("MarketRepositoryService inserts market only when missing", async () => {
   await marketRepositoryService.ensureMarketStored(snapshot);
 
   assert.equal(driverDouble.inserts.length, 1);
+});
+
+test("MarketRepositoryService quotes slug literals for ClickHouse SQL", async () => {
+  const driverDouble = buildDriverDouble();
+  const clickhouseClientService = new ClickhouseClientService({ clickhouseDriver: driverDouble.clickhouseDriver, databaseName: "default" });
+  const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
+
+  await marketRepositoryService.findMarketBySlug("btc-updown-5m-1773233400");
+
+  assert.match(driverDouble.queries[0] || "", /WHERE slug = 'btc-updown-5m-1773233400'/);
 });
 
 test("SnapshotRepositoryService serializes order books on insert", async () => {

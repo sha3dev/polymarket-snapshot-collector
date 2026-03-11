@@ -43,6 +43,11 @@ export class SnapshotRepositoryService {
     return serializedOrderBook;
   }
 
+  private buildSqlStringLiteral(value: string): string {
+    const sqlStringLiteral = `'${value.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
+    return sqlStringLiteral;
+  }
+
   private buildOutcomeFields(snapshot: Snapshot): Pick<SnapshotInsertRow, "up_asset_id" | "up_price" | "up_order_book" | "up_event_ts" | "down_asset_id" | "down_price" | "down_order_book" | "down_event_ts"> {
     return {
       up_asset_id: snapshot.upAssetId,
@@ -99,7 +104,7 @@ export class SnapshotRepositoryService {
     const query = `
       SELECT market_slug, asset, window, generated_at, count(*) AS duplicate_count
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_SNAPSHOT_TABLE}
-      WHERE market_slug = ${JSON.stringify(slug)}
+      WHERE market_slug = ${this.buildSqlStringLiteral(slug)}
       GROUP BY market_slug, asset, window, generated_at
       HAVING duplicate_count > 1
       ORDER BY generated_at ASC
@@ -119,7 +124,7 @@ export class SnapshotRepositoryService {
         okx_price, okx_order_book, okx_event_ts,
         chainlink_price, chainlink_order_book, chainlink_event_ts
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_SNAPSHOT_TABLE}
-      WHERE market_slug = ${JSON.stringify(slug)}
+      WHERE market_slug = ${this.buildSqlStringLiteral(slug)}
       ORDER BY generated_at ASC
     `;
     return await this.clickhouseClientService.queryJsonRows<SnapshotStorageRow>(query);
