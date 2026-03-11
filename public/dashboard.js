@@ -3,8 +3,10 @@ const dashboardMeta = document.getElementById("dashboard-meta");
 let latestDashboardPayload = null;
 let lastSuccessfulRefreshAt = null;
 let isDisconnected = false;
+const widgetStateByPair = new Map();
 const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 3, xrp: 5 };
 const STALE_AFTER_MS = 1000;
+const FRESH_AFTER_MS = 500;
 
 const formatAssetValue = (asset, value) => {
   if (value === null || value === undefined) {
@@ -25,11 +27,21 @@ const readClientSideSnapshotAge = (widget) => {
   const generatedAt = widget.latestSnapshot ? widget.latestSnapshot.generatedAt : null;
   return generatedAt === null ? null : Date.now() - generatedAt;
 };
+const readWidgetPairKey = (widget) => `${widget.asset}:${widget.window}`;
+const readWidgetStaleState = (widget, latestSnapshotAgeMs) => {
+  const pairKey = readWidgetPairKey(widget);
+  const wasStale = widgetStateByPair.get(pairKey) === true;
+  const shouldUseFreshAge = latestSnapshotAgeMs !== null && latestSnapshotAgeMs <= FRESH_AFTER_MS;
+  const shouldUseStaleAge = latestSnapshotAgeMs === null || latestSnapshotAgeMs > STALE_AFTER_MS;
+  const isWidgetStale = isDisconnected || shouldUseStaleAge || (wasStale && !shouldUseFreshAge);
+  widgetStateByPair.set(pairKey, isWidgetStale);
+  return isWidgetStale;
+};
 
 const renderWidget = (widget) => {
   const latestSnapshot = widget.latestSnapshot;
   const latestSnapshotAgeMs = readClientSideSnapshotAge(widget);
-  const isStale = isDisconnected || latestSnapshotAgeMs === null || latestSnapshotAgeMs > STALE_AFTER_MS;
+  const isStale = readWidgetStaleState(widget, latestSnapshotAgeMs);
   const cardStateClass = widget.market ? (isStale ? "is-stale" : "") : "is-empty";
   const badgeClass = isDisconnected ? "disconnected" : widget.marketDirection === "UP" ? "up" : widget.marketDirection === "DOWN" ? "down" : "unknown";
   const badgeLabel = isDisconnected ? "DISCONNECTED" : widget.marketDirection;
@@ -87,8 +99,5 @@ const refreshDashboard = async () => {
 
 refreshDashboard();
 setInterval(() => {
-  if (latestDashboardPayload) {
-    renderDashboard(latestDashboardPayload);
-  }
   void refreshDashboard();
 }, 1000);

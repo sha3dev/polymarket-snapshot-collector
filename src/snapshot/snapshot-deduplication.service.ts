@@ -25,6 +25,8 @@ type SnapshotDeduplicationServiceOptions = { ttlMs: number; maxKeys: number };
 export class SnapshotDeduplicationService {
   private readonly ttlMs: number;
   private readonly maxKeys: number;
+  private readonly cleanupIntervalMs: number;
+  private lastCleanupAtMs = 0;
 
   /**
    * @section private:properties
@@ -39,6 +41,7 @@ export class SnapshotDeduplicationService {
   public constructor(options: SnapshotDeduplicationServiceOptions) {
     this.ttlMs = options.ttlMs;
     this.maxKeys = options.maxKeys;
+    this.cleanupIntervalMs = Math.min(this.ttlMs, 5000);
   }
 
   /**
@@ -81,6 +84,14 @@ export class SnapshotDeduplicationService {
     }
   }
 
+  private evictExpiredEntriesIfNeeded(nowMs: number): void {
+    const shouldRunCleanup = nowMs - this.lastCleanupAtMs >= this.cleanupIntervalMs;
+    if (shouldRunCleanup) {
+      this.evictExpiredEntries(nowMs);
+      this.lastCleanupAtMs = nowMs;
+    }
+  }
+
   /**
    * @section public:methods
    */
@@ -92,7 +103,7 @@ export class SnapshotDeduplicationService {
     const existingEntry = this.fingerprintByKey.get(key) || null;
     let shouldPersist = true;
 
-    this.evictExpiredEntries(nowMs);
+    this.evictExpiredEntriesIfNeeded(nowMs);
     if (existingEntry) {
       const isSameFingerprint = existingEntry.fingerprint === fingerprint;
       if (isSameFingerprint) {

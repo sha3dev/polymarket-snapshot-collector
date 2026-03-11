@@ -40,8 +40,10 @@ export class SnapshotCollectorService {
   private readonly dashboardStateService: DashboardStateService;
   private readonly snapshotRuntime: SnapshotCollectorRuntime;
   private isStarted = false;
+  private readonly pendingSnapshots: Snapshot[] = [];
+  private activeDrainPromise: Promise<void> | null = null;
   private readonly snapshotListener = (snapshot: Snapshot): void => {
-    void this.persistSnapshot(snapshot);
+    this.enqueueSnapshot(snapshot);
   };
 
   /**
@@ -74,6 +76,46 @@ export class SnapshotCollectorService {
   private hasPersistableMarketIdentity(snapshot: Snapshot): boolean {
     const hasPersistableIdentity = Boolean(snapshot.marketSlug && snapshot.marketStart && snapshot.marketEnd);
     return hasPersistableIdentity;
+  }
+
+  private enqueueSnapshot(snapshot: Snapshot): void {
+    this.pendingSnapshots.push(snapshot);
+    this.ensureDrainStarted();
+  }
+
+  private ensureDrainStarted(): void {
+    if (!this.activeDrainPromise) {
+      this.activeDrainPromise = this.runDrainPendingSnapshots();
+    }
+  }
+
+  private async runDrainPendingSnapshots(): Promise<void> {
+    try {
+      await this.drainPendingSnapshots();
+    } catch (error) {
+      LOGGER.error(`snapshot drain failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.rethrowAsyncError(error);
+    } finally {
+      this.activeDrainPromise = null;
+      if (this.pendingSnapshots.length > 0) {
+        this.ensureDrainStarted();
+      }
+    }
+  }
+
+  private async drainPendingSnapshots(): Promise<void> {
+    while (this.pendingSnapshots.length > 0) {
+      const pendingSnapshot = this.pendingSnapshots.shift() || null;
+      if (pendingSnapshot) {
+        await this.persistSnapshot(pendingSnapshot);
+      }
+    }
+  }
+
+  private rethrowAsyncError(error: unknown): void {
+    queueMicrotask(() => {
+      throw error instanceof Error ? error : new Error(String(error));
+    });
   }
 
   private logPersistencePerformance(snapshot: Snapshot, startedAtMs: number, ensureDurationMs: number, insertDurationMs: number, dashboardDurationMs: number): void {
@@ -132,6 +174,9 @@ export class SnapshotCollectorService {
       this.snapshotRuntime.removeSnapshotListener(this.snapshotListener);
       await this.snapshotRuntime.disconnect();
       this.isStarted = false;
+    }
+    if (this.activeDrainPromise) {
+      await this.activeDrainPromise;
     }
   }
 }
