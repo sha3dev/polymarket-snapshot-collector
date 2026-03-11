@@ -10,14 +10,16 @@ import type { Snapshot } from "@sha3/polymarket-snapshot";
 
 import type { ClickhouseClientService } from "../clickhouse/clickhouse-client.service.ts";
 import config from "../config.ts";
+import LOGGER from "../logger.ts";
 import type { SnapshotDuplicateRow, SnapshotStorageRow } from "./snapshot.types.ts";
 
 /**
  * @section types
  */
 
-type SnapshotRepositoryServiceOptions = { clickhouseClientService: ClickhouseClientService };
+type SnapshotRepositoryServiceOptions = { clickhouseClientService: ClickhouseClientService; maxBatchSize?: number; maxBatchWaitMs?: number };
 type SnapshotInsertRow = SnapshotStorageRow & { inserted_at: string };
+type PendingSnapshotInsert = { row: SnapshotInsertRow; resolve: () => void; reject: (error: unknown) => void };
 
 /**
  * @section private:properties
@@ -25,6 +27,11 @@ type SnapshotInsertRow = SnapshotStorageRow & { inserted_at: string };
 
 export class SnapshotRepositoryService {
   private readonly clickhouseClientService: ClickhouseClientService;
+  private readonly maxBatchSize: number;
+  private readonly maxBatchWaitMs: number;
+  private readonly pendingSnapshotInserts: PendingSnapshotInsert[] = [];
+  private activeFlushPromise: Promise<void> | null = null;
+  private flushTimer: NodeJS.Timeout | null = null;
 
   /**
    * @section constructor
@@ -32,6 +39,8 @@ export class SnapshotRepositoryService {
 
   public constructor(options: SnapshotRepositoryServiceOptions) {
     this.clickhouseClientService = options.clickhouseClientService;
+    this.maxBatchSize = options.maxBatchSize ?? config.SNAPSHOT_INSERT_BATCH_MAX_SIZE;
+    this.maxBatchWaitMs = options.maxBatchWaitMs ?? config.SNAPSHOT_INSERT_BATCH_MAX_WAIT_MS;
   }
 
   /**
@@ -90,13 +99,80 @@ export class SnapshotRepositoryService {
     };
   }
 
+  private clearFlushTimer(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+  }
+
+  private readNextBatch(): PendingSnapshotInsert[] {
+    const nextBatch = this.pendingSnapshotInserts.splice(0, this.maxBatchSize);
+    return nextBatch;
+  }
+
+  private async flushPendingBatchLoop(): Promise<void> {
+    while (this.pendingSnapshotInserts.length > 0) {
+      const pendingBatch = this.readNextBatch();
+      const batchRows = pendingBatch.map((pendingInsert) => pendingInsert.row);
+      try {
+        await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_SNAPSHOT_TABLE, batchRows);
+        for (const pendingInsert of pendingBatch) {
+          pendingInsert.resolve();
+        }
+      } catch (error) {
+        LOGGER.error(`snapshot batch insert failed for ${pendingBatch.length} row(s): ${error instanceof Error ? error.message : String(error)}`);
+        for (const pendingInsert of pendingBatch) {
+          pendingInsert.reject(error);
+        }
+      }
+    }
+  }
+
+  private async flushPendingBatch(): Promise<void> {
+    let flushPromise = this.activeFlushPromise;
+    if (!flushPromise && this.pendingSnapshotInserts.length > 0) {
+      this.clearFlushTimer();
+      flushPromise = this.flushPendingBatchLoop()
+        .finally(() => {
+          this.activeFlushPromise = null;
+        });
+      this.activeFlushPromise = flushPromise;
+    }
+    if (flushPromise) {
+      await flushPromise;
+    }
+  }
+
+  private async queueSnapshotInsert(snapshotInsertRow: SnapshotInsertRow): Promise<void> {
+    const insertPromise = new Promise<void>((resolve, reject) => {
+      this.pendingSnapshotInserts.push({ row: snapshotInsertRow, resolve, reject });
+      const shouldFlushImmediately = this.pendingSnapshotInserts.length >= this.maxBatchSize;
+      if (shouldFlushImmediately) {
+        this.clearFlushTimer();
+        void this.flushPendingBatch();
+      }
+      if (!shouldFlushImmediately && !this.flushTimer) {
+        this.flushTimer = setTimeout(() => {
+          void this.flushPendingBatch();
+        }, this.maxBatchWaitMs);
+      }
+    });
+    return await insertPromise;
+  }
+
   /**
    * @section public:methods
    */
 
   public async insertSnapshot(snapshot: Snapshot): Promise<void> {
     const snapshotInsertRow = this.buildInsertRow(snapshot);
-    await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_SNAPSHOT_TABLE, [snapshotInsertRow]);
+    await this.queueSnapshotInsert(snapshotInsertRow);
+  }
+
+  public async close(): Promise<void> {
+    this.clearFlushTimer();
+    await this.flushPendingBatch();
   }
 
   public async listDuplicateSnapshotsBySlug(slug: string): Promise<SnapshotDuplicateRow[]> {

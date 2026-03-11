@@ -252,6 +252,7 @@ test("HttpServerService serves dashboard static assets", async () => {
   assert.equal(jsResponse.status, 200);
   assert.match(jsResponse.headers.get("content-type") || "", /javascript/);
   assert.match(jsBody, /fetch\("\/dashboard\/state"/);
+  assert.match(jsBody, /const STALE_AFTER_MS = 1000/);
   assert.equal(cssResponse.status, 200);
   assert.match(cssResponse.headers.get("content-type") || "", /text\/css/);
   assert.match(cssBody, /\.card/);

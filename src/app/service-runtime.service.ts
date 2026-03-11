@@ -28,6 +28,7 @@ import { SnapshotRepositoryService } from "../snapshot/snapshot-repository.servi
 type ServiceRuntimeOptions = {
   clickhouseClientService: ClickhouseClientService;
   clickhouseSchemaService: ClickhouseSchemaService;
+  snapshotRepositoryService: SnapshotRepositoryService;
   snapshotCollectorService: SnapshotCollectorService;
   httpServerService: HttpServerService;
 };
@@ -39,6 +40,7 @@ type ServiceRuntimeOptions = {
 export class ServiceRuntime {
   private readonly clickhouseClientService: ClickhouseClientService;
   private readonly clickhouseSchemaService: ClickhouseSchemaService;
+  private readonly snapshotRepositoryService: SnapshotRepositoryService;
   private readonly snapshotCollectorService: SnapshotCollectorService;
   private readonly httpServerService: HttpServerService;
   private activeServer: Server | null = null;
@@ -50,6 +52,7 @@ export class ServiceRuntime {
   public constructor(options: ServiceRuntimeOptions) {
     this.clickhouseClientService = options.clickhouseClientService;
     this.clickhouseSchemaService = options.clickhouseSchemaService;
+    this.snapshotRepositoryService = options.snapshotRepositoryService;
     this.snapshotCollectorService = options.snapshotCollectorService;
     this.httpServerService = options.httpServerService;
   }
@@ -68,7 +71,7 @@ export class ServiceRuntime {
     const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService, snapshotRepositoryService, dashboardStateService });
     const snapshotCollectorService = SnapshotCollectorService.createDefault({ marketRepositoryService, snapshotRepositoryService, snapshotDeduplicationService, dashboardStateService });
     const httpServerService = new HttpServerService({ appInfoService: AppInfoService.createDefault(), snapshotQueryService });
-    return new ServiceRuntime({ clickhouseClientService, clickhouseSchemaService, snapshotCollectorService, httpServerService });
+    return new ServiceRuntime({ clickhouseClientService, clickhouseSchemaService, snapshotRepositoryService, snapshotCollectorService, httpServerService });
   }
 
   /**
@@ -125,6 +128,7 @@ export class ServiceRuntime {
       this.activeServer = null;
     }
     await this.snapshotCollectorService.stop();
+    await this.snapshotRepositoryService.close();
     await this.clickhouseClientService.close();
   }
 }

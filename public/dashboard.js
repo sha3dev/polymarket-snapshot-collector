@@ -4,6 +4,7 @@ let latestDashboardPayload = null;
 let lastSuccessfulRefreshAt = null;
 let isDisconnected = false;
 const ASSET_DECIMALS = { btc: 2, eth: 2, sol: 3, xrp: 5 };
+const STALE_AFTER_MS = 1000;
 
 const formatAssetValue = (asset, value) => {
   if (value === null || value === undefined) {
@@ -28,7 +29,7 @@ const readClientSideSnapshotAge = (widget) => {
 const renderWidget = (widget) => {
   const latestSnapshot = widget.latestSnapshot;
   const latestSnapshotAgeMs = readClientSideSnapshotAge(widget);
-  const isStale = isDisconnected || latestSnapshotAgeMs === null || latestSnapshotAgeMs > 10000;
+  const isStale = isDisconnected || latestSnapshotAgeMs === null || latestSnapshotAgeMs > STALE_AFTER_MS;
   const cardStateClass = widget.market ? (isStale ? "is-stale" : "") : "is-empty";
   const badgeClass = isDisconnected ? "disconnected" : widget.marketDirection === "UP" ? "up" : widget.marketDirection === "DOWN" ? "down" : "unknown";
   const badgeLabel = isDisconnected ? "DISCONNECTED" : widget.marketDirection;
