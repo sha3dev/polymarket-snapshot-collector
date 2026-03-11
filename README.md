@@ -127,6 +127,33 @@ Behavior notes:
 - `5m` markets may contain at most `600` snapshots
 - `15m` markets may contain at most `1800` snapshots
 
+### `GET /dashboard`
+
+Returns an internal HTML dashboard with one widget per `asset/window` pair.
+
+Each widget shows:
+
+- active market slug
+- `priceToBeat`
+- `upPrice`
+- `downPrice`
+- `chainlinkPrice`
+- `binancePrice`
+- `coinbasePrice`
+- `krakenPrice`
+- `okxPrice`
+- last snapshot age
+
+Example:
+
+```bash
+open "http://192.168.1.10:3000/dashboard"
+```
+
+### `GET /dashboard/state`
+
+Returns the JSON payload that powers the dashboard.
+
 ## Public API
 
 ### `ServiceRuntime`
@@ -198,6 +225,33 @@ type MarketSnapshotsPayload = {
   marketStart: string;
   marketEnd: string;
   snapshots: Snapshot[];
+};
+```
+
+### `DashboardPayload`
+
+```ts
+type DashboardPayload = {
+  generatedAt: string;
+  widgets: Array<{
+    asset: "btc" | "eth" | "sol" | "xrp";
+    window: "5m" | "15m";
+    market: MarketSummary | null;
+    snapshotCount: number;
+    latestSnapshot: {
+      generatedAt: number;
+      priceToBeat: number | null;
+      upPrice: number | null;
+      downPrice: number | null;
+      chainlinkPrice: number | null;
+      binancePrice: number | null;
+      coinbasePrice: number | null;
+      krakenPrice: number | null;
+      okxPrice: number | null;
+    } | null;
+    latestSnapshotAgeMs: number | null;
+    isStale: boolean;
+  }>;
 };
 ```
 

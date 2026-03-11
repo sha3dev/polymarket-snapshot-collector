@@ -13,6 +13,41 @@ import { SnapshotRepositoryService } from "../src/snapshot/snapshot-repository.s
 
 const POLYMARKET_ORDER_BOOK: OrderBook = { asks: [], bids: [] };
 const PROVIDER_ORDER_BOOK: OrderBookSnapshot = { type: "orderbook", provider: "binance", symbol: "btc", ts: 1, asks: [], bids: [] };
+const DASHBOARD_MARKET_RECORD = { slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+const DASHBOARD_SNAPSHOT_ROW = {
+  asset: "btc",
+  window: "5m",
+  market_slug: "btc-5m",
+  generated_at: "2026-03-11 10:00:00.000",
+  market_id: "m1",
+  market_condition_id: "c1",
+  market_start: "2026-03-11 10:00:00.000",
+  market_end: "2026-03-11 10:05:00.000",
+  price_to_beat: 100,
+  up_asset_id: "u1",
+  up_price: 0.55,
+  up_order_book: null,
+  up_event_ts: 1,
+  down_asset_id: "d1",
+  down_price: 0.45,
+  down_order_book: null,
+  down_event_ts: 2,
+  binance_price: 100,
+  binance_order_book: null,
+  binance_event_ts: 3,
+  coinbase_price: 100,
+  coinbase_order_book: null,
+  coinbase_event_ts: 4,
+  kraken_price: 100,
+  kraken_order_book: null,
+  kraken_event_ts: 5,
+  okx_price: 100,
+  okx_order_book: null,
+  okx_event_ts: 6,
+  chainlink_price: 100,
+  chainlink_order_book: null,
+  chainlink_event_ts: 7,
+};
 
 function buildDriverDouble() {
   const commands: string[] = [];
@@ -35,6 +70,21 @@ function buildDriverDouble() {
     },
   };
   return { commands, inserts, queries, queryResults, clickhouseDriver };
+}
+
+function buildDashboardMarketRepositoryDouble() {
+  return {
+    async findMarketBySlug(slug: string) {
+      return { ...DASHBOARD_MARKET_RECORD, slug };
+    },
+    async listMarkets(options: { asset: string; window: string }) {
+      return options.asset === "btc" && options.window === "5m" ? [DASHBOARD_MARKET_RECORD] : [];
+    },
+  };
+}
+
+function buildDashboardSnapshotRepositoryDouble() {
+  return { async listDuplicateSnapshotsBySlug() { return []; }, async listSnapshotsBySlug() { return [DASHBOARD_SNAPSHOT_ROW]; } };
 }
 
 test("ClickhouseSchemaService creates market and snapshot tables", async () => {
@@ -176,4 +226,17 @@ test("SnapshotQueryService detects duplicate canonical identities", async () => 
   const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
 
   await assert.rejects(() => snapshotQueryService.readMarketSnapshots("btc-5m"), /duplicate snapshot identities/);
+});
+
+test("SnapshotQueryService builds dashboard widgets with up and down prices", async () => {
+  const marketRepositoryService = buildDashboardMarketRepositoryDouble();
+  const snapshotRepositoryService = buildDashboardSnapshotRepositoryDouble();
+  const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService: marketRepositoryService as never, snapshotRepositoryService: snapshotRepositoryService as never });
+
+  const dashboardPayload = await snapshotQueryService.readDashboard();
+
+  assert.equal(dashboardPayload.widgets.length > 0, true);
+  assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.upPrice, 0.55);
+  assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.downPrice, 0.45);
+  assert.equal(dashboardPayload.widgets[0]?.marketDirection, "UP");
 });

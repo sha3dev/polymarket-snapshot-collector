@@ -28,6 +28,36 @@ export type MarketSnapshotsPayload = {
   snapshots: Snapshot[];
 };
 
+export type DashboardWidgetSnapshot = {
+  generatedAt: number;
+  priceToBeat: number | null;
+  upPrice: number | null;
+  downPrice: number | null;
+  chainlinkPrice: number | null;
+  binancePrice: number | null;
+  coinbasePrice: number | null;
+  krakenPrice: number | null;
+  okxPrice: number | null;
+};
+
+export type DashboardMarketDirection = "UP" | "DOWN" | "UNKNOWN";
+
+export type DashboardWidget = {
+  asset: SnapshotAsset;
+  window: SnapshotWindow;
+  market: MarketSummary | null;
+  snapshotCount: number;
+  latestSnapshot: DashboardWidgetSnapshot | null;
+  marketDirection: DashboardMarketDirection;
+  latestSnapshotAgeMs: number | null;
+  isStale: boolean;
+};
+
+export type DashboardPayload = {
+  generatedAt: string;
+  widgets: DashboardWidget[];
+};
+
 export type SnapshotIdentity = { marketSlug: string; asset: SnapshotAsset; window: SnapshotWindow; generatedAt: number };
 
 export type SnapshotFingerprintEntry = { fingerprint: string; storedAt: number };

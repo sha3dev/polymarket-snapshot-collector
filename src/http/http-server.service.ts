@@ -18,7 +18,8 @@ import LOGGER from "../logger.ts";
 import { MarketNotFoundService } from "../snapshot/market-not-found.service.ts";
 import { SnapshotConsistencyService } from "../snapshot/snapshot-consistency.service.ts";
 import type { SnapshotQueryService } from "../snapshot/snapshot-query.service.ts";
-import type { MarketListPayload, MarketSnapshotsPayload } from "../snapshot/snapshot.types.ts";
+import type { DashboardPayload, MarketListPayload, MarketSnapshotsPayload } from "../snapshot/snapshot.types.ts";
+import { DashboardPageService } from "./dashboard-page.service.ts";
 import { HttpRequestService } from "./http-request.service.ts";
 
 /**
@@ -28,6 +29,7 @@ import { HttpRequestService } from "./http-request.service.ts";
 type HttpServerServiceOptions = { appInfoService: AppInfoService; snapshotQueryService: SnapshotQueryService };
 
 type ErrorPayload = { error: string; message: string };
+type MappedError = { statusCode: number; payload: ErrorPayload };
 
 /**
  * @section private:properties
@@ -36,6 +38,7 @@ type ErrorPayload = { error: string; message: string };
 export class HttpServerService {
   private readonly appInfoService: AppInfoService;
   private readonly snapshotQueryService: SnapshotQueryService;
+  private readonly dashboardPageService: DashboardPageService;
 
   /**
    * @section constructor
@@ -44,21 +47,12 @@ export class HttpServerService {
   public constructor(options: HttpServerServiceOptions) {
     this.appInfoService = options.appInfoService;
     this.snapshotQueryService = options.snapshotQueryService;
+    this.dashboardPageService = new DashboardPageService();
   }
 
   /**
    * @section private:methods
    */
-
-  private createErrorPayload(errorCode: string, message: string): ErrorPayload {
-    const errorPayload: ErrorPayload = { error: errorCode, message };
-    return errorPayload;
-  }
-
-  private createJsonResponse(context: Context, statusCode: number, payload: unknown): Response {
-    const response = context.newResponse(JSON.stringify(payload), statusCode as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
-    return response;
-  }
 
   private readFromDate(searchParams: URLSearchParams): string | null {
     const fromDate = searchParams.get("fromDate");
@@ -100,43 +94,43 @@ export class HttpServerService {
     return fromDate ? new Date(fromDate).toISOString() : null;
   }
 
-  private async handleMarketsRequest(searchParams: URLSearchParams): Promise<MarketListPayload> {
-    const asset = this.parseAsset(searchParams);
-    const window = this.parseWindow(searchParams);
-    const fromDate = this.parseFromDate(searchParams);
-    const payload = await this.snapshotQueryService.listMarkets({ asset, window, fromDate });
-    return payload;
-  }
-
   private createApplication(): Hono {
     const application = new Hono();
-    application.get("/", (context) => this.createJsonResponse(context, 200, this.appInfoService.buildPayload()));
+    application.get("/", (context) => context.newResponse(JSON.stringify(this.appInfoService.buildPayload()), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE }));
+    application.get("/dashboard", (context) => context.newResponse(this.dashboardPageService.renderPage(), 200 as StatusCode, { "content-type": "text/html; charset=utf-8" }));
+    application.get("/dashboard/state", async (context) => {
+      const payload: DashboardPayload = await this.snapshotQueryService.readDashboard();
+      return context.newResponse(JSON.stringify(payload), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
+    });
     application.get("/markets", async (context) => {
       const searchParams = new URL(context.req.url).searchParams;
-      const payload = await this.handleMarketsRequest(searchParams);
-      return this.createJsonResponse(context, 200, payload);
+      const asset = this.parseAsset(searchParams);
+      const window = this.parseWindow(searchParams);
+      const fromDate = this.parseFromDate(searchParams);
+      const payload: MarketListPayload = await this.snapshotQueryService.listMarkets({ asset, window, fromDate });
+      return context.newResponse(JSON.stringify(payload), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
     });
     application.get("/markets/:slug/snapshots", async (context) => {
       const slug = decodeURIComponent(context.req.param("slug"));
       const payload: MarketSnapshotsPayload = await this.snapshotQueryService.readMarketSnapshots(slug);
-      return this.createJsonResponse(context, 200, payload);
+      return context.newResponse(JSON.stringify(payload), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
     });
-    application.notFound((context) => this.createJsonResponse(context, 404, this.createErrorPayload("invalid_request", "route not found")));
+    application.notFound((context) => context.newResponse(JSON.stringify({ error: "invalid_request", message: "route not found" }), 404 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE }));
     application.onError((error, context) => this.handleApplicationError(context, error));
     return application;
   }
 
-  private mapError(error: unknown): { statusCode: number; payload: ErrorPayload } {
-    let mappedError = { statusCode: 500, payload: this.createErrorPayload("internal_error", "internal server error") };
+  private mapError(error: unknown): MappedError {
+    let mappedError: MappedError = { statusCode: 500, payload: { error: "internal_error", message: "internal server error" } };
 
     if (error instanceof HttpRequestService) {
-      mappedError = { statusCode: error.statusCode, payload: this.createErrorPayload(error.errorCode, error.message) };
+      mappedError = { statusCode: error.statusCode, payload: { error: error.errorCode, message: error.message } };
     }
     if (error instanceof MarketNotFoundService) {
-      mappedError = { statusCode: 404, payload: this.createErrorPayload("market_not_found", error.message) };
+      mappedError = { statusCode: 404, payload: { error: "market_not_found", message: error.message } };
     }
     if (error instanceof SnapshotConsistencyService) {
-      mappedError = { statusCode: 409, payload: this.createErrorPayload("snapshot_consistency_error", error.message) };
+      mappedError = { statusCode: 409, payload: { error: "snapshot_consistency_error", message: error.message } };
     }
     return mappedError;
   }
@@ -144,7 +138,7 @@ export class HttpServerService {
   private handleApplicationError(context: Context, error: unknown): Response {
     const mappedError = this.mapError(error);
     LOGGER.error(`request handling failed: ${error instanceof Error ? error.message : String(error)}`);
-    return this.createJsonResponse(context, mappedError.statusCode, mappedError.payload);
+    return context.newResponse(JSON.stringify(mappedError.payload), mappedError.statusCode as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
   }
 
   /**
