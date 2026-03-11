@@ -123,12 +123,21 @@ export class SnapshotCollectorService {
     LOGGER.warn(`skipping snapshot without market identity for ${snapshot.asset}/${snapshot.window} at ${snapshot.generatedAt}`);
   }
 
+  private handleConflictingDuplicateSnapshot(snapshot: Snapshot): void {
+    LOGGER.warn(
+      `skipping conflicting duplicate snapshot for ${snapshot.asset}/${snapshot.window} slug=${snapshot.marketSlug || ""} generatedAt=${snapshot.generatedAt}`,
+    );
+  }
+
   private async persistCompleteSnapshot(snapshot: Snapshot): Promise<PersistedSnapshotEntry | null> {
     let persistedSnapshot: PersistedSnapshotEntry | null = null;
-    const shouldPersist = this.snapshotDeduplicationService.shouldPersist(snapshot);
-    if (shouldPersist) {
+    const persistenceDecision = this.snapshotDeduplicationService.readPersistenceDecision(snapshot);
+    if (persistenceDecision === "persist") {
       const marketRecord = await this.marketRepositoryService.ensureMarketStored(snapshot);
       persistedSnapshot = { marketRecord, snapshot };
+    }
+    if (persistenceDecision === "conflict") {
+      this.handleConflictingDuplicateSnapshot(snapshot);
     }
     return persistedSnapshot;
   }

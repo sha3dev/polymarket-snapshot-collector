@@ -49,27 +49,24 @@ test("SnapshotDeduplicationService skips identical duplicate replays", () => {
   const snapshotDeduplicationService = new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 });
   const snapshot = buildSnapshot();
 
-  assert.equal(snapshotDeduplicationService.shouldPersist(snapshot), true);
-  assert.equal(snapshotDeduplicationService.shouldPersist(snapshot), false);
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(snapshot), "persist");
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(snapshot), "duplicate");
 });
 
-test("SnapshotDeduplicationService rejects duplicate replays with different payloads", () => {
+test("SnapshotDeduplicationService marks duplicate replays with different payloads as conflicts", () => {
   const snapshotDeduplicationService = new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 });
 
-  snapshotDeduplicationService.shouldPersist(buildSnapshot());
-
-  assert.throws(() => {
-    snapshotDeduplicationService.shouldPersist(buildSnapshot({ binancePrice: 101 }));
-  }, /duplicate snapshot identity/);
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(buildSnapshot()), "persist");
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(buildSnapshot({ binancePrice: 101 })), "conflict");
 });
 
 test("SnapshotDeduplicationService keeps 5m and 15m snapshots separate", () => {
   const snapshotDeduplicationService = new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 });
 
-  assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "5m" })), true);
-  assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "15m" })), true);
-  assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "5m" })), false);
-  assert.equal(snapshotDeduplicationService.shouldPersist(buildSnapshot({ window: "15m" })), false);
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(buildSnapshot({ window: "5m" })), "persist");
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(buildSnapshot({ window: "15m" })), "persist");
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(buildSnapshot({ window: "5m" })), "duplicate");
+  assert.equal(snapshotDeduplicationService.readPersistenceDecision(buildSnapshot({ window: "15m" })), "duplicate");
 });
 
 test("SnapshotCollectorService subscribes once and persists complete snapshots", async () => {
@@ -178,4 +175,42 @@ test("SnapshotCollectorService updates dashboard before batch insert finishes", 
     resolveInsert();
   }
   await snapshotCollectorService.stop();
+});
+
+test("SnapshotCollectorService skips conflicting duplicate payloads without stopping the collector", async () => {
+  const storedSnapshotBatches: string[][] = [];
+  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
+  let listener: ((snapshot: Snapshot) => void) | null = null;
+  const snapshotCollectorService = new SnapshotCollectorService({
+    marketRepositoryService: {
+      async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
+        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+      },
+    } as never,
+    snapshotRepositoryService: {
+      async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) {
+        storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || ""));
+      },
+    } as never,
+    snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
+    dashboardStateService,
+    snapshotRuntime: {
+      addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
+        listener = options.listener;
+      },
+      removeSnapshotListener() {},
+      async disconnect() {},
+    },
+  });
+
+  snapshotCollectorService.start();
+  const currentListener = listener as unknown as (snapshot: Snapshot) => void;
+  currentListener(buildSnapshot());
+  currentListener(buildSnapshot({ binancePrice: 101 }));
+  await Promise.resolve();
+  await Promise.resolve();
+  await snapshotCollectorService.stop();
+
+  assert.deepEqual(storedSnapshotBatches, [["btc-5m"]]);
+  assert.equal(dashboardStateService.readDashboard().widgets[0]?.latestSnapshot?.binancePrice, 100);
 });

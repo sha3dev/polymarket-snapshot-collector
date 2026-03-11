@@ -9,7 +9,6 @@ import type { Snapshot } from "@sha3/polymarket-snapshot";
  */
 
 import config from "../config.ts";
-import { SnapshotConsistencyService } from "./snapshot-consistency.service.ts";
 import type { SnapshotFingerprintEntry } from "./snapshot.types.ts";
 
 /**
@@ -17,6 +16,7 @@ import type { SnapshotFingerprintEntry } from "./snapshot.types.ts";
  */
 
 type SnapshotDeduplicationServiceOptions = { ttlMs: number; maxKeys: number };
+type SnapshotPersistenceDecision = "persist" | "duplicate" | "conflict";
 
 /**
  * @section private:attributes
@@ -96,26 +96,26 @@ export class SnapshotDeduplicationService {
    * @section public:methods
    */
 
-  public shouldPersist(snapshot: Snapshot): boolean {
+  public readPersistenceDecision(snapshot: Snapshot): SnapshotPersistenceDecision {
     const nowMs = Date.now();
     const key = this.buildKey(snapshot);
     const fingerprint = this.buildFingerprint(snapshot);
     const existingEntry = this.fingerprintByKey.get(key) || null;
-    let shouldPersist = true;
+    let persistenceDecision: SnapshotPersistenceDecision = "persist";
 
     this.evictExpiredEntriesIfNeeded(nowMs);
     if (existingEntry) {
       const isSameFingerprint = existingEntry.fingerprint === fingerprint;
       if (isSameFingerprint) {
-        shouldPersist = false;
+        persistenceDecision = "duplicate";
       } else {
-        throw new SnapshotConsistencyService(`duplicate snapshot identity with different payload for key ${key}`);
+        persistenceDecision = "conflict";
       }
     }
-    if (shouldPersist) {
+    if (persistenceDecision === "persist") {
       this.fingerprintByKey.set(key, { fingerprint, storedAt: nowMs });
       this.trimToMaxKeys();
     }
-    return shouldPersist;
+    return persistenceDecision;
   }
 }
