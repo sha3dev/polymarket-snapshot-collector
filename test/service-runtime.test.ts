@@ -6,12 +6,12 @@ import { AppInfoService } from "../src/app-info/app-info.service.ts";
 import { HttpServerService } from "../src/http/http-server.service.ts";
 import { MarketNotFoundService } from "../src/snapshot/market-not-found.service.ts";
 import { SnapshotConsistencyService } from "../src/snapshot/snapshot-consistency.service.ts";
-import type { DashboardPayload, MarketListPayload, MarketSnapshotsPayload } from "../src/snapshot/snapshot.types.ts";
+import type { MarketListPayload, MarketSnapshotsPayload, StatePayload } from "../src/snapshot/snapshot.types.ts";
 
 type QueryServiceDouble = {
   listMarkets(options: { asset: string; window: string; fromDate: string | null }): Promise<MarketListPayload>;
   readMarketSnapshots(slug: string): Promise<MarketSnapshotsPayload>;
-  readDashboard(): Promise<DashboardPayload>;
+  readState(): Promise<StatePayload>;
 };
 
 type MarketFilter = { asset: string; window: string; fromDate: string | null };
@@ -65,7 +65,7 @@ function buildHttpServerService(queryServiceDouble: QueryServiceDouble): HttpSer
 }
 
 function buildUnusedQueryServiceDouble(): QueryServiceDouble {
-  return { async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readDashboard() { throw new Error("not used"); } };
+  return { async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readState() { throw new Error("not used"); } };
 }
 
 function buildMarketListPayload(): MarketListPayload {
@@ -80,38 +80,12 @@ function buildSnapshotPayload(slug: string): MarketSnapshotsPayload {
   return { ...BASE_MARKET_SNAPSHOTS_PAYLOAD, slug, snapshots: [{ ...snapshot, marketSlug: slug }] };
 }
 
-function buildDashboardWidget() {
-  return {
-    asset: "btc" as const,
-    window: "5m" as const,
-    market: {
-      slug: "btc-5m",
-      asset: "btc" as const,
-      window: "5m" as const,
-      priceToBeat: 100,
-      marketStart: "2026-03-11T10:00:00.000Z",
-      marketEnd: "2026-03-11T10:05:00.000Z",
-    },
-    snapshotCount: 1,
-    latestSnapshot: {
-      generatedAt: 1741687200000,
-      priceToBeat: 100,
-      upPrice: 0.55,
-      downPrice: 0.45,
-      chainlinkPrice: 100,
-      binancePrice: 100,
-      coinbasePrice: 100,
-      krakenPrice: 100,
-      okxPrice: 100,
-    },
-    marketDirection: "UP" as const,
-    latestSnapshotAgeMs: 800,
-    isStale: false,
-  };
+function buildStateMarket(): StatePayload["markets"][number] {
+  return { asset: "btc", window: "5m", market: { slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }, snapshotCount: 1, latestSnapshot: { generatedAt: 1741687200000, priceToBeat: 100, upPrice: 0.55, downPrice: 0.45, chainlinkPrice: 100, binancePrice: 100, coinbasePrice: 100, krakenPrice: 100, okxPrice: 100 }, marketDirection: "UP", latestSnapshotAgeMs: 800, isStale: false };
 }
 
-function buildDashboardPayload(): DashboardPayload {
-  return { generatedAt: "2026-03-11T10:00:00.000Z", widgets: [buildDashboardWidget()] };
+function buildStatePayload(): StatePayload {
+  return { generatedAt: "2026-03-11T10:00:00.000Z", markets: [buildStateMarket()] };
 }
 
 async function listen(server: ReturnType<HttpServerService["buildServer"]>): Promise<number> {
@@ -157,7 +131,7 @@ test("HttpServerService returns filtered markets", async () => {
       return buildMarketListPayload();
     },
     async readMarketSnapshots() { throw new Error("not used"); },
-    async readDashboard() { throw new Error("not used"); },
+    async readState() { throw new Error("not used"); },
   });
   const server = httpServerService.buildServer();
   const port = await listen(server);
@@ -185,7 +159,7 @@ test("HttpServerService validates markets query params", async () => {
 });
 
 test("HttpServerService serves market snapshots", async () => {
-  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots(slug) { return buildSnapshotPayload(slug); }, async readDashboard() { throw new Error("not used"); } });
+  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots(slug) { return buildSnapshotPayload(slug); }, async readState() { throw new Error("not used"); } });
   const server = httpServerService.buildServer();
   const port = await listen(server);
   const response = await fetch(`http://127.0.0.1:${port}/markets/btc-5m/snapshots`);
@@ -199,7 +173,7 @@ test("HttpServerService serves market snapshots", async () => {
 });
 
 test("HttpServerService maps domain errors", async () => {
-  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new MarketNotFoundService("missing"); }, async readDashboard() { throw new Error("not used"); } });
+  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new MarketNotFoundService("missing"); }, async readState() { throw new Error("not used"); } });
   const server = httpServerService.buildServer();
   const port = await listen(server);
   const notFoundResponse = await fetch(`http://127.0.0.1:${port}/markets/missing/snapshots`);
@@ -212,7 +186,7 @@ test("HttpServerService maps domain errors", async () => {
 });
 
 test("HttpServerService maps consistency errors", async () => {
-  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new SnapshotConsistencyService("duplicate rows"); }, async readDashboard() { throw new Error("not used"); } });
+  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new SnapshotConsistencyService("duplicate rows"); }, async readState() { throw new Error("not used"); } });
   const server = httpServerService.buildServer();
   const port = await listen(server);
   const response = await fetch(`http://127.0.0.1:${port}/markets/btc-5m/snapshots`);
@@ -224,57 +198,30 @@ test("HttpServerService maps consistency errors", async () => {
   await close(server);
 });
 
-test("HttpServerService serves dashboard html", async () => {
-  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readDashboard() { return buildDashboardPayload(); } });
+test("HttpServerService serves state", async () => {
+  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readState() { return buildStatePayload(); } });
   const server = httpServerService.buildServer();
   const port = await listen(server);
-  const response = await fetch(`http://127.0.0.1:${port}/dashboard`);
-  const html = await response.text();
-
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") || "", /text\/html/);
-  assert.match(html, /Snapshot Dashboard/);
-  assert.match(html, /dashboard\.css/);
-  assert.match(html, /dashboard\.js/);
-
-  await close(server);
-});
-
-test("HttpServerService serves dashboard static assets", async () => {
-  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readDashboard() { return buildDashboardPayload(); } });
-  const server = httpServerService.buildServer();
-  const port = await listen(server);
-  const jsResponse = await fetch(`http://127.0.0.1:${port}/dashboard.js`);
-  const cssResponse = await fetch(`http://127.0.0.1:${port}/dashboard.css`);
-  const jsBody = await jsResponse.text();
-  const cssBody = await cssResponse.text();
-
-  assert.equal(jsResponse.status, 200);
-  assert.match(jsResponse.headers.get("content-type") || "", /javascript/);
-  assert.match(jsBody, /fetch\("\/dashboard\/state"/);
-  assert.match(jsBody, /const STALE_AFTER_MS = 1000/);
-  assert.match(jsBody, /const REFRESH_INTERVAL_MS = 500/);
-  assert.match(jsBody, /const REFRESH_ALIGNMENT_MS = 0/);
-  assert.match(jsBody, /const scheduleAlignedRefresh = \(\) => \{/);
-  assert.match(jsBody, /window\.setTimeout\(async \(\) => \{/);
-  assert.equal(cssResponse.status, 200);
-  assert.match(cssResponse.headers.get("content-type") || "", /text\/css/);
-  assert.match(cssBody, /\.card/);
-
-  await close(server);
-});
-
-test("HttpServerService serves dashboard state", async () => {
-  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readDashboard() { return buildDashboardPayload(); } });
-  const server = httpServerService.buildServer();
-  const port = await listen(server);
-  const response = await fetch(`http://127.0.0.1:${port}/dashboard/state`);
+  const response = await fetch(`http://127.0.0.1:${port}/state`);
   const json = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(json.widgets[0].latestSnapshot.upPrice, 0.55);
-  assert.equal(json.widgets[0].latestSnapshot.downPrice, 0.45);
-  assert.equal(json.widgets[0].marketDirection, "UP");
+  assert.equal(json.markets[0].latestSnapshot.upPrice, 0.55);
+  assert.equal(json.markets[0].latestSnapshot.downPrice, 0.45);
+  assert.equal(json.markets[0].marketDirection, "UP");
+
+  await close(server);
+});
+
+test("HttpServerService no longer serves dashboard routes", async () => {
+  const httpServerService = buildHttpServerService({ async listMarkets() { return { markets: [] }; }, async readMarketSnapshots() { throw new Error("not used"); }, async readState() { return buildStatePayload(); } });
+  const server = httpServerService.buildServer();
+  const port = await listen(server);
+  const dashboardResponse = await fetch(`http://127.0.0.1:${port}/dashboard`);
+  const dashboardStateResponse = await fetch(`http://127.0.0.1:${port}/dashboard/state`);
+
+  assert.equal(dashboardResponse.status, 404);
+  assert.equal(dashboardStateResponse.status, 404);
 
   await close(server);
 });

@@ -3,7 +3,7 @@
  */
 
 import { SnapshotService } from "@sha3/polymarket-snapshot";
-import type { Snapshot } from "@sha3/polymarket-snapshot";
+import type { Snapshot, SnapshotService as SnapshotServiceType } from "@sha3/polymarket-snapshot";
 
 /**
  * @section imports:internals
@@ -12,20 +12,20 @@ import type { Snapshot } from "@sha3/polymarket-snapshot";
 import config from "../config.ts";
 import LOGGER from "../logger.ts";
 import type { MarketRepositoryService } from "../market/market-repository.service.ts";
-import type { DashboardStateService } from "../snapshot/dashboard-state.service.ts";
 import type { SnapshotDeduplicationService } from "../snapshot/snapshot-deduplication.service.ts";
 import type { SnapshotRepositoryService } from "../snapshot/snapshot-repository.service.ts";
-import type { SnapshotCollectorRuntime } from "./collector.types.ts";
+import type { StateStoreService } from "../snapshot/state-store.service.ts";
 
 /**
  * @section types
  */
 
+type SnapshotCollectorRuntime = Pick<SnapshotServiceType, "addSnapshotListener" | "removeSnapshotListener" | "disconnect">;
 type SnapshotCollectorServiceOptions = {
   marketRepositoryService: MarketRepositoryService;
   snapshotRepositoryService: SnapshotRepositoryService;
   snapshotDeduplicationService: SnapshotDeduplicationService;
-  dashboardStateService: DashboardStateService;
+  stateStoreService: StateStoreService;
   snapshotRuntime: SnapshotCollectorRuntime;
 };
 type PersistedSnapshotEntry = { marketRecord: Awaited<ReturnType<MarketRepositoryService["ensureMarketStored"]>>; snapshot: Snapshot };
@@ -39,7 +39,7 @@ export class SnapshotCollectorService {
   private readonly marketRepositoryService: MarketRepositoryService;
   private readonly snapshotRepositoryService: SnapshotRepositoryService;
   private readonly snapshotDeduplicationService: SnapshotDeduplicationService;
-  private readonly dashboardStateService: DashboardStateService;
+  private readonly stateStoreService: StateStoreService;
   private readonly snapshotRuntime: SnapshotCollectorRuntime;
   private readonly maxPersistBatchSize = config.SNAPSHOT_INSERT_BATCH_MAX_SIZE;
   private isStarted = false;
@@ -57,7 +57,7 @@ export class SnapshotCollectorService {
     this.marketRepositoryService = options.marketRepositoryService;
     this.snapshotRepositoryService = options.snapshotRepositoryService;
     this.snapshotDeduplicationService = options.snapshotDeduplicationService;
-    this.dashboardStateService = options.dashboardStateService;
+    this.stateStoreService = options.stateStoreService;
     this.snapshotRuntime = options.snapshotRuntime;
   }
 
@@ -162,14 +162,14 @@ export class SnapshotCollectorService {
 
   private async insertPersistedSnapshotBatch(persistedBatch: readonly PersistedSnapshotEntry[]): Promise<void> {
     if (persistedBatch.length > 0) {
-      this.updateDashboardSnapshotBatch(persistedBatch);
+      this.updateStateSnapshotBatch(persistedBatch);
       await this.snapshotRepositoryService.insertSnapshots(persistedBatch.map((entry) => entry.snapshot));
     }
   }
 
-  private updateDashboardSnapshotBatch(persistedBatch: readonly PersistedSnapshotEntry[]): void {
+  private updateStateSnapshotBatch(persistedBatch: readonly PersistedSnapshotEntry[]): void {
     for (const persistedSnapshot of persistedBatch) {
-      this.dashboardStateService.updateSnapshot(persistedSnapshot.marketRecord, persistedSnapshot.snapshot);
+      this.stateStoreService.updateSnapshot(persistedSnapshot.marketRecord, persistedSnapshot.snapshot);
     }
   }
 

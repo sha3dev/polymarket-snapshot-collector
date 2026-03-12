@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { Snapshot } from "@sha3/polymarket-snapshot";
 import type { MarketRecord } from "../src/market/market.types.ts";
-import { DashboardStateService } from "../src/snapshot/dashboard-state.service.ts";
+import { StateStoreService } from "../src/snapshot/state-store.service.ts";
 
 const BASE_MARKET_RECORD: MarketRecord = {
   slug: "btc-5m",
@@ -51,40 +51,44 @@ const BASE_SNAPSHOT: Snapshot = {
   chainlinkEventTs: 7,
 };
 
-test("DashboardStateService serves dashboard widgets from memory", () => {
+test("StateStoreService serves memory-backed state in stable order", () => {
   const realNow = Date.now;
   const supportedAssets = ["btc", "eth", "sol", "xrp"] as const;
   const supportedWindows = ["5m", "15m"] as const;
-  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets, supportedWindows });
+  const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets, supportedWindows });
   try {
     Date.now = () => Date.parse("2026-03-11T10:00:08.000Z");
-    dashboardStateService.updateSnapshot(BASE_MARKET_RECORD, BASE_SNAPSHOT);
+    stateStoreService.updateSnapshot(BASE_MARKET_RECORD, BASE_SNAPSHOT);
 
-    const dashboardPayload = dashboardStateService.readDashboard();
+    const statePayload = stateStoreService.readState();
 
-    assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.upPrice, 0.55);
-    assert.equal(dashboardPayload.widgets[0]?.latestSnapshot?.downPrice, 0.45);
-    assert.equal(dashboardPayload.widgets[0]?.marketDirection, "UP");
-    assert.equal(dashboardPayload.widgets[0]?.latestSnapshotAgeMs, 8000);
-    assert.equal(dashboardPayload.widgets[0]?.isStale, false);
+    assert.equal(statePayload.markets.length, 8);
+    assert.equal(statePayload.markets[0]?.asset, "btc");
+    assert.equal(statePayload.markets[0]?.window, "5m");
+    assert.equal(statePayload.markets[0]?.latestSnapshot?.upPrice, 0.55);
+    assert.equal(statePayload.markets[0]?.latestSnapshot?.downPrice, 0.45);
+    assert.equal(statePayload.markets[0]?.marketDirection, "UP");
+    assert.equal(statePayload.markets[0]?.latestSnapshotAgeMs, 8000);
+    assert.equal(statePayload.markets[0]?.isStale, false);
+    assert.equal(statePayload.markets[1]?.market, null);
   } finally {
     Date.now = realNow;
   }
 });
 
-test("DashboardStateService resets snapshot count when market changes within a widget", () => {
+test("StateStoreService resets snapshot count when market changes within an entry", () => {
   const supportedAssets = ["btc", "eth", "sol", "xrp"] as const;
   const supportedWindows = ["5m", "15m"] as const;
-  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets, supportedWindows });
+  const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets, supportedWindows });
 
-  dashboardStateService.updateSnapshot(BASE_MARKET_RECORD, BASE_SNAPSHOT);
-  dashboardStateService.updateSnapshot(
+  stateStoreService.updateSnapshot(BASE_MARKET_RECORD, BASE_SNAPSHOT);
+  stateStoreService.updateSnapshot(
     { ...BASE_MARKET_RECORD, slug: "btc-5m-next", marketStart: "2026-03-11T10:05:00.000Z", marketEnd: "2026-03-11T10:10:00.000Z" },
     { ...BASE_SNAPSHOT, marketSlug: "btc-5m-next" },
   );
 
-  const dashboardPayload = dashboardStateService.readDashboard();
+  const statePayload = stateStoreService.readState();
 
-  assert.equal(dashboardPayload.widgets[0]?.market?.slug, "btc-5m-next");
-  assert.equal(dashboardPayload.widgets[0]?.snapshotCount, 1);
+  assert.equal(statePayload.markets[0]?.market?.slug, "btc-5m-next");
+  assert.equal(statePayload.markets[0]?.snapshotCount, 1);
 });

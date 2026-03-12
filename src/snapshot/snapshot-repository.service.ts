@@ -104,10 +104,6 @@ export class SnapshotRepositoryService {
    * @section public:methods
    */
 
-  public async insertSnapshot(snapshot: Snapshot): Promise<void> {
-    await this.insertSnapshots([snapshot]);
-  }
-
   public async insertSnapshots(snapshots: readonly Snapshot[]): Promise<void> {
     const snapshotInsertRows = snapshots.map((snapshot) => this.buildInsertRow(snapshot));
     await this.insertSnapshotRows(snapshotInsertRows);

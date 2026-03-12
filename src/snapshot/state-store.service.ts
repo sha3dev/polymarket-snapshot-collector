@@ -10,35 +10,35 @@ import type { Snapshot, SnapshotAsset, SnapshotWindow } from "@sha3/polymarket-s
 
 import config from "../config.ts";
 import type { MarketRecord } from "../market/market.types.ts";
-import type { DashboardMarketDirection, DashboardPayload, DashboardWidget, DashboardWidgetSnapshot, MarketSummary } from "./snapshot.types.ts";
+import type { MarketSummary, StateMarketDirection, StateMarketEntry, StateMarketSnapshotSummary, StatePayload } from "./snapshot.types.ts";
 
 /**
  * @section types
  */
 
-type DashboardStateServiceOptions = {
+type StateStoreServiceOptions = {
   staleAfterMs: number;
   supportedAssets: readonly SnapshotAsset[];
   supportedWindows: readonly SnapshotWindow[];
 };
 
-type DashboardWidgetState = Omit<DashboardWidget, "latestSnapshotAgeMs" | "isStale">;
+type StateMarketEntryState = Omit<StateMarketEntry, "latestSnapshotAgeMs" | "isStale">;
 
 /**
  * @section private:properties
  */
 
-export class DashboardStateService {
+export class StateStoreService {
   private readonly staleAfterMs: number;
   private readonly supportedAssets: readonly SnapshotAsset[];
   private readonly supportedWindows: readonly SnapshotWindow[];
-  private readonly widgetStateByKey = new Map<string, DashboardWidgetState>();
+  private readonly marketStateByKey = new Map<string, StateMarketEntryState>();
 
   /**
    * @section constructor
    */
 
-  public constructor(options: DashboardStateServiceOptions) {
+  public constructor(options: StateStoreServiceOptions) {
     this.staleAfterMs = options.staleAfterMs;
     this.supportedAssets = options.supportedAssets;
     this.supportedWindows = options.supportedWindows;
@@ -48,25 +48,25 @@ export class DashboardStateService {
    * @section factory
    */
 
-  public static createDefault(): DashboardStateService {
+  public static createDefault(): StateStoreService {
     const supportedAssets = [...config.SUPPORTED_ASSETS];
     const supportedWindows = [...config.SUPPORTED_WINDOWS];
-    return new DashboardStateService({ staleAfterMs: config.DASHBOARD_STALE_AFTER_MS, supportedAssets, supportedWindows });
+    return new StateStoreService({ staleAfterMs: config.STATE_STALE_AFTER_MS, supportedAssets, supportedWindows });
   }
 
   /**
    * @section private:methods
    */
 
-  private buildWidgetKey(asset: SnapshotAsset, window: SnapshotWindow): string {
-    const widgetKey = `${asset}:${window}`;
-    return widgetKey;
+  private buildMarketKey(asset: SnapshotAsset, window: SnapshotWindow): string {
+    const marketKey = `${asset}:${window}`;
+    return marketKey;
   }
 
-  private readMarketDirection(widgetSnapshot: DashboardWidgetSnapshot | null): DashboardMarketDirection {
-    let marketDirection: DashboardMarketDirection = "UNKNOWN";
-    const referencePrice = widgetSnapshot?.chainlinkPrice;
-    const priceToBeat = widgetSnapshot?.priceToBeat;
+  private readMarketDirection(snapshotSummary: StateMarketSnapshotSummary | null): StateMarketDirection {
+    let marketDirection: StateMarketDirection = "UNKNOWN";
+    const referencePrice = snapshotSummary?.chainlinkPrice;
+    const priceToBeat = snapshotSummary?.priceToBeat;
     const canReadMarketDirection = referencePrice !== null && referencePrice !== undefined && priceToBeat !== null && priceToBeat !== undefined;
     if (canReadMarketDirection) {
       marketDirection = referencePrice >= priceToBeat ? "UP" : "DOWN";
@@ -74,9 +74,9 @@ export class DashboardStateService {
     return marketDirection;
   }
 
-  private buildWidgetState(marketRecord: MarketRecord, snapshot: Snapshot, currentWidgetState: DashboardWidgetState | null): DashboardWidgetState {
-    const isSameMarket = currentWidgetState?.market?.slug === marketRecord.slug;
-    const widgetSnapshot: DashboardWidgetSnapshot = {
+  private buildStateEntry(marketRecord: MarketRecord, snapshot: Snapshot, currentMarketState: StateMarketEntryState | null): StateMarketEntryState {
+    const isSameMarket = currentMarketState?.market?.slug === marketRecord.slug;
+    const latestSnapshot: StateMarketSnapshotSummary = {
       generatedAt: snapshot.generatedAt,
       priceToBeat: marketRecord.priceToBeat,
       upPrice: snapshot.upPrice,
@@ -98,9 +98,9 @@ export class DashboardStateService {
         marketStart: marketRecord.marketStart,
         marketEnd: marketRecord.marketEnd,
       } satisfies MarketSummary,
-      snapshotCount: isSameMarket && currentWidgetState ? currentWidgetState.snapshotCount + 1 : 1,
-      latestSnapshot: widgetSnapshot,
-      marketDirection: this.readMarketDirection(widgetSnapshot),
+      snapshotCount: isSameMarket && currentMarketState ? currentMarketState.snapshotCount + 1 : 1,
+      latestSnapshot,
+      marketDirection: this.readMarketDirection(latestSnapshot),
     };
   }
 
@@ -109,26 +109,26 @@ export class DashboardStateService {
    */
 
   public updateSnapshot(marketRecord: MarketRecord, snapshot: Snapshot): void {
-    const widgetKey = this.buildWidgetKey(marketRecord.asset, marketRecord.window);
-    const currentWidgetState = this.widgetStateByKey.get(widgetKey) || null;
-    const nextWidgetState = this.buildWidgetState(marketRecord, snapshot, currentWidgetState);
-    this.widgetStateByKey.set(widgetKey, nextWidgetState);
+    const marketKey = this.buildMarketKey(marketRecord.asset, marketRecord.window);
+    const currentMarketState = this.marketStateByKey.get(marketKey) || null;
+    const nextMarketState = this.buildStateEntry(marketRecord, snapshot, currentMarketState);
+    this.marketStateByKey.set(marketKey, nextMarketState);
   }
 
-  public readDashboard(): DashboardPayload {
-    const widgets: DashboardWidget[] = [];
+  public readState(): StatePayload {
+    const markets: StateMarketEntry[] = [];
     for (const asset of this.supportedAssets) {
       for (const window of this.supportedWindows) {
-        const widgetState = this.widgetStateByKey.get(this.buildWidgetKey(asset, window)) || null;
-        const latestSnapshotAgeMs = widgetState?.latestSnapshot ? Date.now() - widgetState.latestSnapshot.generatedAt : null;
+        const marketState = this.marketStateByKey.get(this.buildMarketKey(asset, window)) || null;
+        const latestSnapshotAgeMs = marketState?.latestSnapshot ? Date.now() - marketState.latestSnapshot.generatedAt : null;
         const marketDirection = "UNKNOWN" as const;
-        const widget = widgetState
-          ? { ...widgetState, latestSnapshotAgeMs, isStale: latestSnapshotAgeMs === null || latestSnapshotAgeMs > this.staleAfterMs }
+        const marketEntry = marketState
+          ? { ...marketState, latestSnapshotAgeMs, isStale: latestSnapshotAgeMs === null || latestSnapshotAgeMs > this.staleAfterMs }
           : { asset, window, market: null, snapshotCount: 0, latestSnapshot: null, marketDirection, latestSnapshotAgeMs: null, isStale: true };
-        widgets.push(widget);
+        markets.push(marketEntry);
       }
     }
-    const payload: DashboardPayload = { generatedAt: new Date().toISOString(), widgets };
+    const payload: StatePayload = { generatedAt: new Date().toISOString(), markets };
     return payload;
   }
 }

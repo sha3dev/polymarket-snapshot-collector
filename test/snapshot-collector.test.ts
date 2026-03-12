@@ -3,8 +3,8 @@ import { test } from "node:test";
 
 import type { Snapshot } from "@sha3/polymarket-snapshot";
 import { SnapshotCollectorService } from "../src/collector/snapshot-collector.service.ts";
-import { DashboardStateService } from "../src/snapshot/dashboard-state.service.ts";
 import { SnapshotDeduplicationService } from "../src/snapshot/snapshot-deduplication.service.ts";
+import { StateStoreService } from "../src/snapshot/state-store.service.ts";
 
 const BASE_SNAPSHOT: Snapshot = {
   asset: "btc",
@@ -73,7 +73,7 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
   const addedListeners: unknown[] = [];
   const storedMarkets: string[] = [];
   const storedSnapshotBatches: string[][] = [];
-  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
+  const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
     marketRepositoryService: {
@@ -84,7 +84,7 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
     } as never,
     snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
-    dashboardStateService,
+    stateStoreService,
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         addedListeners.push(options);
@@ -106,18 +106,18 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
   assert.equal(addedListeners.length, 1);
   assert.deepEqual(storedMarkets, ["btc-5m"]);
   assert.deepEqual(storedSnapshotBatches, [["btc-5m"]]);
-  assert.equal(dashboardStateService.readDashboard().widgets[0]?.snapshotCount, 1);
+  assert.equal(stateStoreService.readState().markets[0]?.snapshotCount, 1);
 });
 
 test("SnapshotCollectorService skips incomplete snapshots", async () => {
   const storedSnapshotBatches: string[][] = [];
-  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
+  const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
     marketRepositoryService: { async ensureMarketStored() { return { slug: "unused", asset: "btc", window: "5m", priceToBeat: null, marketId: null, marketConditionId: null, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }; } } as never,
     snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
-    dashboardStateService,
+    stateStoreService,
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         listener = options.listener;
@@ -138,7 +138,7 @@ test("SnapshotCollectorService skips incomplete snapshots", async () => {
 });
 
 test("SnapshotCollectorService updates dashboard before batch insert finishes", async () => {
-  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
+  const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   let resolveInsert: (() => void) | undefined;
   const insertPromise = new Promise<void>((resolve) => { resolveInsert = resolve; });
@@ -150,7 +150,7 @@ test("SnapshotCollectorService updates dashboard before batch insert finishes", 
     } as never,
     snapshotRepositoryService: { async insertSnapshots() { await insertPromise; } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
-    dashboardStateService,
+    stateStoreService,
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         listener = options.listener;
@@ -169,7 +169,7 @@ test("SnapshotCollectorService updates dashboard before batch insert finishes", 
     setImmediate(resolve);
   });
 
-  assert.equal(dashboardStateService.readDashboard().widgets[0]?.snapshotCount, 1);
+  assert.equal(stateStoreService.readState().markets[0]?.snapshotCount, 1);
 
   if (resolveInsert) {
     resolveInsert();
@@ -179,7 +179,7 @@ test("SnapshotCollectorService updates dashboard before batch insert finishes", 
 
 test("SnapshotCollectorService skips conflicting duplicate payloads without stopping the collector", async () => {
   const storedSnapshotBatches: string[][] = [];
-  const dashboardStateService = new DashboardStateService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
+  const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
     marketRepositoryService: {
@@ -193,7 +193,7 @@ test("SnapshotCollectorService skips conflicting duplicate payloads without stop
       },
     } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
-    dashboardStateService,
+    stateStoreService,
     snapshotRuntime: {
       addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
         listener = options.listener;
@@ -212,5 +212,5 @@ test("SnapshotCollectorService skips conflicting duplicate payloads without stop
   await snapshotCollectorService.stop();
 
   assert.deepEqual(storedSnapshotBatches, [["btc-5m"]]);
-  assert.equal(dashboardStateService.readDashboard().widgets[0]?.latestSnapshot?.binancePrice, 100);
+  assert.equal(stateStoreService.readState().markets[0]?.latestSnapshot?.binancePrice, 100);
 });

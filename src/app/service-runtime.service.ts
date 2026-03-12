@@ -16,10 +16,10 @@ import config from "../config.ts";
 import { HttpServerService } from "../http/http-server.service.ts";
 import LOGGER from "../logger.ts";
 import { MarketRepositoryService } from "../market/market-repository.service.ts";
-import { DashboardStateService } from "../snapshot/dashboard-state.service.ts";
 import { SnapshotDeduplicationService } from "../snapshot/snapshot-deduplication.service.ts";
 import { SnapshotQueryService } from "../snapshot/snapshot-query.service.ts";
 import { SnapshotRepositoryService } from "../snapshot/snapshot-repository.service.ts";
+import { StateStoreService } from "../snapshot/state-store.service.ts";
 
 /**
  * @section types
@@ -67,9 +67,9 @@ export class ServiceRuntime {
     const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
     const snapshotRepositoryService = new SnapshotRepositoryService({ clickhouseClientService });
     const snapshotDeduplicationService = SnapshotDeduplicationService.createDefault();
-    const dashboardStateService = DashboardStateService.createDefault();
-    const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService, snapshotRepositoryService, dashboardStateService });
-    const snapshotCollectorService = SnapshotCollectorService.createDefault({ marketRepositoryService, snapshotRepositoryService, snapshotDeduplicationService, dashboardStateService });
+    const stateStoreService = StateStoreService.createDefault();
+    const snapshotQueryService = new SnapshotQueryService({ marketRepositoryService, snapshotRepositoryService, stateStoreService });
+    const snapshotCollectorService = SnapshotCollectorService.createDefault({ marketRepositoryService, snapshotRepositoryService, snapshotDeduplicationService, stateStoreService });
     const httpServerService = new HttpServerService({ appInfoService: AppInfoService.createDefault(), snapshotQueryService });
     return new ServiceRuntime({ clickhouseClientService, clickhouseSchemaService, snapshotRepositoryService, snapshotCollectorService, httpServerService });
   }

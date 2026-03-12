@@ -3,18 +3,28 @@
  */
 
 import { createClient } from "@clickhouse/client";
+import type { CommandParams, InsertParams } from "@clickhouse/client";
 
 /**
  * @section imports:internals
  */
 
 import config from "../config.ts";
-import type { ClickhouseDriver, ClickhouseJsonResultSet } from "./clickhouse.types.ts";
 
 /**
  * @section types
  */
 
+type ClickhouseJsonResultSet = {
+  json<T>(): Promise<T[]>;
+  close(): void;
+};
+type ClickhouseDriver = {
+  close(): Promise<void>;
+  command(params: CommandParams): Promise<unknown>;
+  insert<T>(params: InsertParams<unknown, T>): Promise<unknown>;
+  query(params: { query: string; format: "JSONEachRow" }): Promise<ClickhouseJsonResultSet>;
+};
 type ClickhouseClientServiceOptions = { clickhouseDriver: ClickhouseDriver; databaseName: string };
 
 /**

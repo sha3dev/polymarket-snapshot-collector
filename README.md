@@ -1,6 +1,6 @@
 # @sha3/polymarket-snapshot-collector
 
-Internal service that subscribes to `@sha3/polymarket-snapshot`, stores full snapshots in ClickHouse, and exposes a small HTTP API for market discovery and snapshot retrieval.
+Internal service that subscribes to `@sha3/polymarket-snapshot`, stores full snapshots in ClickHouse, and exposes a small HTTP API for market discovery, historical snapshot retrieval, and current in-memory state.
 
 ## TL;DR
 
@@ -18,16 +18,16 @@ curl "http://localhost:3000/markets?asset=btc&window=5m"
 
 - Keep Polymarket snapshot persistence in one process with one storage model.
 - Keep market metadata in `market` and store only time-varying snapshot fields in `snapshot`.
-- Expose a simple internal API for market lists and stored snapshot playback.
+- Expose a simple internal API for market lists, stored snapshot playback, and current in-memory state.
 
 ## Main Capabilities
 
 - Creates `market` and `snapshot` tables on startup when they do not exist.
 - Subscribes internally to the configured asset and window pairs.
 - Prevents duplicate writes for the same canonical snapshot identity with a short in-memory deduplication cache.
-- Fails fast when the same canonical identity is received again with a different payload.
+- Warns and skips conflicting duplicate payloads when the same canonical identity is received again with different data.
 - Stores stable market metadata once in `market` and avoids repeating it in every snapshot row.
-- Exposes HTTP endpoints for market listing and snapshot retrieval.
+- Exposes HTTP endpoints for market listing, snapshot retrieval, and current in-memory state.
 
 ## Installation
 
@@ -127,32 +127,22 @@ Behavior notes:
 - `5m` markets may contain at most `600` snapshots
 - `15m` markets may contain at most `1800` snapshots
 
-### `GET /dashboard`
+### `GET /state`
 
-Returns an internal HTML dashboard with one widget per `asset/window` pair.
+Returns the current in-memory state for all supported `asset/window` pairs.
 
-Each widget shows:
+Behavior notes:
 
-- active market slug
-- `priceToBeat`
-- `upPrice`
-- `downPrice`
-- `chainlinkPrice`
-- `binancePrice`
-- `coinbasePrice`
-- `krakenPrice`
-- `okxPrice`
-- last snapshot age
+- memory-backed, not reconstructed from ClickHouse
+- always returns exactly `8` entries in `markets`
+- entry order is stable: `btc/5m`, `btc/15m`, `eth/5m`, `eth/15m`, `sol/5m`, `sol/15m`, `xrp/5m`, `xrp/15m`
+- entries with no active market still exist with `market: null` and `latestSnapshot: null`
 
 Example:
 
 ```bash
-open "http://192.168.1.10:3000/dashboard"
+curl "http://192.168.1.10:3000/state"
 ```
-
-### `GET /dashboard/state`
-
-Returns the JSON payload that powers the dashboard.
 
 ## Public API
 
@@ -228,12 +218,12 @@ type MarketSnapshotsPayload = {
 };
 ```
 
-### `DashboardPayload`
+### `StatePayload`
 
 ```ts
-type DashboardPayload = {
+type StatePayload = {
   generatedAt: string;
-  widgets: Array<{
+  markets: Array<{
     asset: "btc" | "eth" | "sol" | "xrp";
     window: "5m" | "15m";
     market: MarketSummary | null;
@@ -249,11 +239,22 @@ type DashboardPayload = {
       krakenPrice: number | null;
       okxPrice: number | null;
     } | null;
+    marketDirection: "UP" | "DOWN" | "UNKNOWN";
     latestSnapshotAgeMs: number | null;
     isStale: boolean;
   }>;
 };
 ```
+
+Field notes:
+
+- `generatedAt`: server-side timestamp for the state payload
+- `markets`: stable list of one entry per supported `asset/window`
+- `snapshotCount`: number of snapshots seen for the currently active market in that entry
+- `latestSnapshot`: latest successfully ingested snapshot summary for that entry
+- `marketDirection`: derived from `chainlinkPrice` versus `priceToBeat`
+- `latestSnapshotAgeMs`: age of the latest snapshot when the payload was produced
+- `isStale`: whether the entry has no latest snapshot or the latest snapshot age exceeds the configured stale threshold
 
 ## Compatibility
 
@@ -274,7 +275,7 @@ type DashboardPayload = {
 - `config.CLICKHOUSE_MARKET_TABLE`: market table name.
 - `config.CLICKHOUSE_SNAPSHOT_TABLE`: snapshot table name.
 - `config.SNAPSHOT_INTERVAL_MS`: polling interval passed to `@sha3/polymarket-snapshot`.
-- `config.DASHBOARD_STALE_AFTER_MS`: age threshold used to paint dashboard widgets as stale. Default `1000` ms.
+- `config.STATE_STALE_AFTER_MS`: age threshold used to mark state entries as stale. Default `1000` ms.
 - `config.SNAPSHOT_INSERT_BATCH_MAX_SIZE`: maximum number of snapshot rows grouped into one ClickHouse insert. Default `512`.
 - `config.SUPPORTED_ASSETS`: subscribed assets.
 - `config.SUPPORTED_WINDOWS`: subscribed windows.
@@ -298,7 +299,7 @@ type DashboardPayload = {
 - `src/collector/`: snapshot collector runtime
 - `src/http/`: HTTP server and request error mapping
 - `src/market/`: market persistence repository
-- `src/snapshot/`: snapshot persistence, query logic, deduplication, and exported payload types
+- `src/snapshot/`: snapshot persistence, query logic, deduplication, in-memory state store, and exported payload types
 - `test/`: deterministic node:test coverage
 
 ## Troubleshooting
@@ -313,7 +314,7 @@ Verify that `HTTP_HOST` is still `0.0.0.0` and that the machine firewall allows 
 
 ### Duplicate snapshot writes
 
-The canonical identity is `market_slug + asset + window + generated_at`. The service prevents duplicate writes in the ingestion path with a short in-memory deduplication cache.
+The canonical identity is `market_slug + asset + window + generated_at`. The service prevents duplicate writes in the ingestion path with a short in-memory deduplication cache and skips conflicting duplicate payloads with a warning.
 
 ClickHouse `MergeTree` ordering keys are not unique constraints, so the storage engine does not enforce row uniqueness by itself. If duplicate rows already exist because data was inserted outside this service or before deduplication was in place, clean that data from ClickHouse before relying on the API responses.
 

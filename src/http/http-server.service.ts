@@ -18,9 +18,8 @@ import LOGGER from "../logger.ts";
 import { MarketNotFoundService } from "../snapshot/market-not-found.service.ts";
 import { SnapshotConsistencyService } from "../snapshot/snapshot-consistency.service.ts";
 import type { SnapshotQueryService } from "../snapshot/snapshot-query.service.ts";
-import type { DashboardPayload, MarketListPayload, MarketSnapshotsPayload } from "../snapshot/snapshot.types.ts";
+import type { MarketListPayload, MarketSnapshotsPayload, StatePayload } from "../snapshot/snapshot.types.ts";
 import { HttpRequestService } from "./http-request.service.ts";
-import { StaticAssetService } from "./static-asset.service.ts";
 
 /**
  * @section types
@@ -38,7 +37,6 @@ type MappedError = { statusCode: number; payload: ErrorPayload };
 export class HttpServerService {
   private readonly appInfoService: AppInfoService;
   private readonly snapshotQueryService: SnapshotQueryService;
-  private readonly staticAssetService: StaticAssetService;
 
   /**
    * @section constructor
@@ -47,17 +45,11 @@ export class HttpServerService {
   public constructor(options: HttpServerServiceOptions) {
     this.appInfoService = options.appInfoService;
     this.snapshotQueryService = options.snapshotQueryService;
-    this.staticAssetService = new StaticAssetService();
   }
 
   /**
    * @section private:methods
    */
-
-  private readFromDate(searchParams: URLSearchParams): string | null {
-    const fromDate = searchParams.get("fromDate");
-    return fromDate;
-  }
 
   private parseAsset(searchParams: URLSearchParams): "btc" | "eth" | "sol" | "xrp" {
     const asset = searchParams.get("asset");
@@ -78,7 +70,7 @@ export class HttpServerService {
   }
 
   private parseFromDate(searchParams: URLSearchParams): string | null {
-    const fromDate = this.readFromDate(searchParams);
+    const fromDate = searchParams.get("fromDate");
     const isValidFromDate = fromDate ? !Number.isNaN(new Date(fromDate).getTime()) : true;
     if (!isValidFromDate) {
       throw new HttpRequestService(400, "invalid_request", "fromDate must be a valid ISO-8601 timestamp");
@@ -86,29 +78,13 @@ export class HttpServerService {
     return fromDate ? new Date(fromDate).toISOString() : null;
   }
 
-  private async readStaticAsset(assetName: string): Promise<{ body: string; contentType: string }> {
-    return await this.staticAssetService.readAsset(assetName);
-  }
-
-  private async createStaticAssetResponse(context: Context, assetName: string): Promise<Response> {
-    const asset = await this.readStaticAsset(assetName);
-    return context.newResponse(asset.body, 200 as StatusCode, { "content-type": asset.contentType });
-  }
-
-  private registerDashboardRoutes(application: Hono): void {
-    application.get("/dashboard", async (context) => await this.createStaticAssetResponse(context, "dashboard.html"));
-    application.get("/dashboard.js", async (context) => await this.createStaticAssetResponse(context, "dashboard.js"));
-    application.get("/dashboard.css", async (context) => await this.createStaticAssetResponse(context, "dashboard.css"));
-    application.get("/dashboard/state", async (context) => {
-      const payload: DashboardPayload = await this.snapshotQueryService.readDashboard();
-      return context.newResponse(JSON.stringify(payload), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
-    });
-  }
-
   private createApplication(): Hono {
     const application = new Hono();
     application.get("/", (context) => context.newResponse(JSON.stringify(this.appInfoService.buildPayload()), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE }));
-    this.registerDashboardRoutes(application);
+    application.get("/state", async (context) => {
+      const payload: StatePayload = await this.snapshotQueryService.readState();
+      return context.newResponse(JSON.stringify(payload), 200 as StatusCode, { "content-type": config.RESPONSE_CONTENT_TYPE });
+    });
     application.get("/markets", async (context) => {
       const searchParams = new URL(context.req.url).searchParams;
       const asset = this.parseAsset(searchParams);

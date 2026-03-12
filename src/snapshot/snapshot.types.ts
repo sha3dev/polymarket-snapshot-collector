@@ -28,7 +28,7 @@ export type MarketSnapshotsPayload = {
   snapshots: Snapshot[];
 };
 
-export type DashboardWidgetSnapshot = {
+export type StateMarketSnapshotSummary = {
   generatedAt: number;
   priceToBeat: number | null;
   upPrice: number | null;
@@ -40,25 +40,23 @@ export type DashboardWidgetSnapshot = {
   okxPrice: number | null;
 };
 
-export type DashboardMarketDirection = "UP" | "DOWN" | "UNKNOWN";
+export type StateMarketDirection = "UP" | "DOWN" | "UNKNOWN";
 
-export type DashboardWidget = {
+export type StateMarketEntry = {
   asset: SnapshotAsset;
   window: SnapshotWindow;
   market: MarketSummary | null;
   snapshotCount: number;
-  latestSnapshot: DashboardWidgetSnapshot | null;
-  marketDirection: DashboardMarketDirection;
+  latestSnapshot: StateMarketSnapshotSummary | null;
+  marketDirection: StateMarketDirection;
   latestSnapshotAgeMs: number | null;
   isStale: boolean;
 };
 
-export type DashboardPayload = {
+export type StatePayload = {
   generatedAt: string;
-  widgets: DashboardWidget[];
+  markets: StateMarketEntry[];
 };
-
-export type SnapshotIdentity = { marketSlug: string; asset: SnapshotAsset; window: SnapshotWindow; generatedAt: number };
 
 export type SnapshotFingerprintEntry = { fingerprint: string; storedAt: number };
 

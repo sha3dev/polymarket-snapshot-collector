@@ -10,11 +10,11 @@ import type { Snapshot } from "@sha3/polymarket-snapshot";
 
 import type { MarketRepositoryService } from "../market/market-repository.service.ts";
 import type { MarketRecord } from "../market/market.types.ts";
-import type { DashboardStateService } from "./dashboard-state.service.ts";
 import { MarketNotFoundService } from "./market-not-found.service.ts";
 import { SnapshotConsistencyService } from "./snapshot-consistency.service.ts";
 import type { SnapshotRepositoryService } from "./snapshot-repository.service.ts";
-import type { DashboardPayload, MarketListPayload, MarketSnapshotsPayload, MarketSummary, SnapshotStorageRow } from "./snapshot.types.ts";
+import type { MarketListPayload, MarketSnapshotsPayload, MarketSummary, SnapshotStorageRow, StatePayload } from "./snapshot.types.ts";
+import type { StateStoreService } from "./state-store.service.ts";
 
 /**
  * @section types
@@ -23,7 +23,7 @@ import type { DashboardPayload, MarketListPayload, MarketSnapshotsPayload, Marke
 type SnapshotQueryServiceOptions = {
   marketRepositoryService: MarketRepositoryService;
   snapshotRepositoryService: SnapshotRepositoryService;
-  dashboardStateService: DashboardStateService;
+  stateStoreService: StateStoreService;
 };
 
 /**
@@ -33,7 +33,7 @@ type SnapshotQueryServiceOptions = {
 export class SnapshotQueryService {
   private readonly marketRepositoryService: MarketRepositoryService;
   private readonly snapshotRepositoryService: SnapshotRepositoryService;
-  private readonly dashboardStateService: DashboardStateService;
+  private readonly stateStoreService: StateStoreService;
 
   /**
    * @section constructor
@@ -42,7 +42,7 @@ export class SnapshotQueryService {
   public constructor(options: SnapshotQueryServiceOptions) {
     this.marketRepositoryService = options.marketRepositoryService;
     this.snapshotRepositoryService = options.snapshotRepositoryService;
-    this.dashboardStateService = options.dashboardStateService;
+    this.stateStoreService = options.stateStoreService;
   }
 
   /**
@@ -185,8 +185,8 @@ export class SnapshotQueryService {
     return payload;
   }
 
-  public async readDashboard(): Promise<DashboardPayload> {
-    const payload = this.dashboardStateService.readDashboard();
+  public async readState(): Promise<StatePayload> {
+    const payload = this.stateStoreService.readState();
     return payload;
   }
 }
