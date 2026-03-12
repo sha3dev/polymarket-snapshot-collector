@@ -10,6 +10,7 @@ const BASE_MARKET_RECORD: MarketRecord = {
   asset: "btc",
   window: "5m",
   priceToBeat: 100,
+  prevPriceToBeat: [99, 98],
   marketId: "m1",
   marketConditionId: "c1",
   marketStart: "2026-03-11T10:00:00.000Z",

@@ -69,7 +69,7 @@ function buildUnusedQueryServiceDouble(): QueryServiceDouble {
 }
 
 function buildMarketListPayload(): MarketListPayload {
-  return { markets: [{ slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }] };
+  return { markets: [{ slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z", prevPriceToBeat: [99, 98] }] };
 }
 
 function buildSnapshotPayload(slug: string): MarketSnapshotsPayload {
@@ -81,7 +81,7 @@ function buildSnapshotPayload(slug: string): MarketSnapshotsPayload {
 }
 
 function buildStateMarket(): StatePayload["markets"][number] {
-  return { asset: "btc", window: "5m", market: { slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }, snapshotCount: 1, latestSnapshot: { generatedAt: 1741687200000, priceToBeat: 100, upPrice: 0.55, downPrice: 0.45, chainlinkPrice: 100, binancePrice: 100, coinbasePrice: 100, krakenPrice: 100, okxPrice: 100 }, marketDirection: "UP", latestSnapshotAgeMs: 800, isStale: false };
+  return { asset: "btc", window: "5m", market: { slug: "btc-5m", asset: "btc", window: "5m", priceToBeat: 100, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z", prevPriceToBeat: [] }, snapshotCount: 1, latestSnapshot: { generatedAt: 1741687200000, priceToBeat: 100, upPrice: 0.55, downPrice: 0.45, chainlinkPrice: 100, binancePrice: 100, coinbasePrice: 100, krakenPrice: 100, okxPrice: 100 }, marketDirection: "UP", latestSnapshotAgeMs: 800, isStale: false };
 }
 
 function buildStatePayload(): StatePayload {
@@ -141,6 +141,7 @@ test("HttpServerService returns filtered markets", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(capturedOptions, [{ asset: "btc", window: "5m", fromDate: "2026-03-11T10:00:00.000Z" }]);
   assert.deepEqual(json, buildMarketListPayload());
+  assert.equal(json.markets[0]?.prevPriceToBeat[0], 99);
 
   await close(server);
 });
@@ -184,6 +185,28 @@ test("HttpServerService returns markets filtered by asset only", async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(capturedOptions, [{ asset: "btc", window: null, fromDate: null }]);
+  assert.deepEqual(json, buildMarketListPayload());
+
+  await close(server);
+});
+
+test("HttpServerService returns markets filtered by window only", async () => {
+  const capturedOptions: MarketFilter[] = [];
+  const httpServerService = buildHttpServerService({
+    async listMarkets(options) {
+      capturedOptions.push(options);
+      return buildMarketListPayload();
+    },
+    async readMarketSnapshots() { throw new Error("not used"); },
+    async readState() { throw new Error("not used"); },
+  });
+  const server = httpServerService.buildServer();
+  const port = await listen(server);
+  const response = await fetch(`http://127.0.0.1:${port}/markets?window=5m`);
+  const json = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capturedOptions, [{ asset: null, window: "5m", fromDate: null }]);
   assert.deepEqual(json, buildMarketListPayload());
 
   await close(server);

@@ -97,6 +97,7 @@ export class StateStoreService {
         priceToBeat: marketRecord.priceToBeat,
         marketStart: marketRecord.marketStart,
         marketEnd: marketRecord.marketEnd,
+        prevPriceToBeat: marketRecord.prevPriceToBeat,
       } satisfies MarketSummary,
       snapshotCount: isSameMarket && currentMarketState ? currentMarketState.snapshotCount + 1 : 1,
       latestSnapshot,

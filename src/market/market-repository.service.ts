@@ -25,9 +25,11 @@ type MarketRow = {
   asset: string;
   window: string;
   price_to_beat: number | null;
+  prev_price_to_beat: number[];
   market_start: string;
   market_end: string;
 };
+type PreviousPriceToBeatRow = { price_to_beat: number };
 
 /**
  * @section private:attributes
@@ -60,6 +62,7 @@ export class MarketRepositoryService {
       asset: row.asset as MarketRecord["asset"],
       window: row.window as MarketRecord["window"],
       priceToBeat: row.price_to_beat,
+      prevPriceToBeat: row.prev_price_to_beat,
       marketStart,
       marketEnd,
     };
@@ -71,18 +74,18 @@ export class MarketRepositoryService {
     return sqlStringLiteral;
   }
 
-  private buildMarketRecordFromSnapshot(snapshot: Snapshot): MarketRecord {
-    const marketRecord: MarketRecord = {
-      slug: snapshot.marketSlug || "",
-      marketId: snapshot.marketId,
-      marketConditionId: snapshot.marketConditionId,
-      asset: snapshot.asset,
-      window: snapshot.window,
-      priceToBeat: snapshot.priceToBeat,
-      marketStart: new Date(snapshot.marketStart || 0).toISOString(),
-      marketEnd: new Date(snapshot.marketEnd || 0).toISOString(),
-    };
-    return marketRecord;
+  private async readPreviousPriceToBeat(asset: Snapshot["asset"], window: Snapshot["window"]): Promise<number[]> {
+    const rows = await this.clickhouseClientService.queryJsonRows<PreviousPriceToBeatRow>(`
+      SELECT price_to_beat
+      FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
+      WHERE asset = ${this.buildSqlStringLiteral(asset)}
+        AND window = ${this.buildSqlStringLiteral(window)}
+        AND price_to_beat IS NOT NULL
+      ORDER BY market_start DESC
+      LIMIT ${config.MARKET_RECENT_HISTORY_LIMIT}
+    `);
+    const previousPriceToBeat = rows.map((row) => row.price_to_beat);
+    return previousPriceToBeat;
   }
 
   private hasFinalPriceToBeat(marketRecord: MarketRecord | null): boolean {
@@ -92,7 +95,7 @@ export class MarketRepositoryService {
 
   private async loadStoredMarketRecord(snapshotSlug: string): Promise<MarketRecord | null> {
     const existingRows = await this.clickhouseClientService.queryJsonRows<MarketRow>(`
-      SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
+      SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, prev_price_to_beat, market_start, market_end
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
       WHERE slug = ${this.buildSqlStringLiteral(snapshotSlug)}
       ORDER BY market_start ASC
@@ -107,6 +110,8 @@ export class MarketRepositoryService {
   }
 
   private async insertMarketRecord(snapshot: Snapshot, snapshotSlug: string): Promise<MarketRecord> {
+    const hasPriceToBeat = snapshot.priceToBeat !== null && snapshot.priceToBeat !== undefined;
+    const previousPriceToBeat = hasPriceToBeat ? await this.readPreviousPriceToBeat(snapshot.asset, snapshot.window) : [];
     const marketRow: MarketRow = {
       slug: snapshotSlug,
       market_id: snapshot.marketId,
@@ -114,12 +119,23 @@ export class MarketRepositoryService {
       asset: snapshot.asset,
       window: snapshot.window,
       price_to_beat: snapshot.priceToBeat,
+      prev_price_to_beat: previousPriceToBeat,
       market_start: new Date(snapshot.marketStart || 0).toISOString().replace("T", " ").replace("Z", ""),
       market_end: new Date(snapshot.marketEnd || 0).toISOString().replace("T", " ").replace("Z", ""),
     };
     const insertedAt = new Date().toISOString().replace("T", " ").replace("Z", "");
     await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_MARKET_TABLE, [{ ...marketRow, inserted_at: insertedAt }]);
-    const marketRecord = this.buildMarketRecordFromSnapshot(snapshot);
+    const marketRecord: MarketRecord = {
+      slug: snapshotSlug,
+      marketId: snapshot.marketId,
+      marketConditionId: snapshot.marketConditionId,
+      asset: snapshot.asset,
+      window: snapshot.window,
+      priceToBeat: snapshot.priceToBeat,
+      prevPriceToBeat: previousPriceToBeat,
+      marketStart: new Date(snapshot.marketStart || 0).toISOString(),
+      marketEnd: new Date(snapshot.marketEnd || 0).toISOString(),
+    };
     this.cachedMarketRecordBySlug.set(marketRecord.slug, marketRecord);
     return marketRecord;
   }
@@ -134,12 +150,13 @@ export class MarketRepositoryService {
     ) {
       this.pendingPriceToBeatBackfills.add(marketRecord.slug);
       try {
+        const previousPriceToBeat = await this.readPreviousPriceToBeat(snapshot.asset, snapshot.window);
         await this.clickhouseClientService.command(`
           ALTER TABLE ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
-          UPDATE price_to_beat = ${snapshot.priceToBeat}
+          UPDATE price_to_beat = ${snapshot.priceToBeat}, prev_price_to_beat = [${previousPriceToBeat.join(", ")}]
           WHERE slug = ${this.buildSqlStringLiteral(marketRecord.slug)} AND price_to_beat IS NULL
         `);
-        nextMarketRecord = { ...marketRecord, priceToBeat: snapshot.priceToBeat };
+        nextMarketRecord = { ...marketRecord, priceToBeat: snapshot.priceToBeat, prevPriceToBeat: previousPriceToBeat };
         this.cachedMarketRecordBySlug.set(nextMarketRecord.slug, nextMarketRecord);
       } catch (error) {
         this.pendingPriceToBeatBackfills.delete(marketRecord.slug);
@@ -172,7 +189,7 @@ export class MarketRepositoryService {
     const shouldRefreshFromClickhouse = !this.hasFinalPriceToBeat(cachedMarketRecord);
     if (shouldRefreshFromClickhouse) {
       const rows = await this.clickhouseClientService.queryJsonRows<MarketRow>(`
-        SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
+        SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, prev_price_to_beat, market_start, market_end
         FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
         WHERE slug = ${this.buildSqlStringLiteral(slug)}
         ORDER BY market_start ASC
@@ -193,7 +210,7 @@ export class MarketRepositoryService {
       ? ` AND market_start >= toDateTime64(${this.buildSqlStringLiteral(new Date(options.fromDate).toISOString().replace("T", " ").replace("Z", ""))}, 3, 'UTC')`
       : "";
     const rows = await this.clickhouseClientService.queryJsonRows<MarketRow>(`
-      SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
+      SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, prev_price_to_beat, market_start, market_end
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
       WHERE 1 = 1${assetClause}${windowClause}${fromDateClause}
       ORDER BY market_start ASC

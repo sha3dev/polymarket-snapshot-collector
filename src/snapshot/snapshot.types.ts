@@ -15,6 +15,7 @@ export type MarketSummary = {
   priceToBeat: number | null;
   marketStart: string;
   marketEnd: string;
+  prevPriceToBeat: number[];
 };
 
 export type MarketListPayload = { markets: MarketSummary[] };

@@ -70,6 +70,7 @@ export class ClickhouseSchemaService {
         asset LowCardinality(String),
         window LowCardinality(String),
         price_to_beat Nullable(Float64),
+        prev_price_to_beat Array(Float64),
         market_start DateTime64(3, 'UTC'),
         market_end DateTime64(3, 'UTC'),
         inserted_at DateTime64(3, 'UTC')

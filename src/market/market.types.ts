@@ -15,6 +15,7 @@ export type MarketRecord = {
   asset: SnapshotAsset;
   window: SnapshotWindow;
   priceToBeat: number | null;
+  prevPriceToBeat: number[];
   marketStart: string;
   marketEnd: string;
 };

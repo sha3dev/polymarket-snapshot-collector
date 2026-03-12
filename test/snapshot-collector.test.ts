@@ -79,7 +79,7 @@ test("SnapshotCollectorService subscribes once and persists complete snapshots",
     marketRepositoryService: {
       async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
         storedMarkets.push(snapshot.marketSlug || "");
-        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, prevPriceToBeat: [99, 98], marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
       },
     } as never,
     snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
@@ -114,7 +114,7 @@ test("SnapshotCollectorService skips incomplete snapshots", async () => {
   const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
   let listener: ((snapshot: Snapshot) => void) | null = null;
   const snapshotCollectorService = new SnapshotCollectorService({
-    marketRepositoryService: { async ensureMarketStored() { return { slug: "unused", asset: "btc", window: "5m", priceToBeat: null, marketId: null, marketConditionId: null, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }; } } as never,
+    marketRepositoryService: { async ensureMarketStored() { return { slug: "unused", asset: "btc", window: "5m", priceToBeat: null, prevPriceToBeat: [], marketId: null, marketConditionId: null, marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" }; } } as never,
     snapshotRepositoryService: { async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) { storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || "")); } } as never,
     snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
     stateStoreService,
@@ -145,7 +145,7 @@ test("SnapshotCollectorService updates dashboard before batch insert finishes", 
   const snapshotCollectorService = new SnapshotCollectorService({
     marketRepositoryService: {
       async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
-        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, prevPriceToBeat: [99, 98], marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
       },
     } as never,
     snapshotRepositoryService: { async insertSnapshots() { await insertPromise; } } as never,
@@ -184,7 +184,7 @@ test("SnapshotCollectorService skips conflicting duplicate payloads without stop
   const snapshotCollectorService = new SnapshotCollectorService({
     marketRepositoryService: {
       async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
-        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, prevPriceToBeat: [99, 98], marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
       },
     } as never,
     snapshotRepositoryService: {

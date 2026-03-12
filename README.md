@@ -131,6 +131,7 @@ Behavior notes:
 - when only `asset` is provided, only that asset is returned across all windows
 - when only `window` is provided, only that window is returned across all assets
 - when both are provided, both filters are applied
+- each returned market includes `prevPriceToBeat`, containing the latest configured previous `priceToBeat` closes for the same `asset/window`
 
 ### `GET /markets/:slug/snapshots`
 
@@ -215,6 +216,7 @@ type MarketSummary = {
   priceToBeat: number | null;
   marketStart: string;
   marketEnd: string;
+  prevPriceToBeat: number[];
 };
 ```
 
@@ -295,6 +297,7 @@ Field notes:
 - `config.CLICKHOUSE_SNAPSHOT_TABLE`: snapshot table name.
 - `config.SNAPSHOT_INTERVAL_MS`: polling interval passed to `@sha3/polymarket-snapshot`.
 - `config.STATE_STALE_AFTER_MS`: age threshold used to mark state entries as stale. Default `1000` ms.
+- `config.MARKET_RECENT_HISTORY_LIMIT`: number of previous `priceToBeat` closes stored in `prevPriceToBeat` for each market. Default `3`.
 - `config.SNAPSHOT_INSERT_BATCH_MAX_SIZE`: maximum number of snapshot rows grouped into one ClickHouse insert. Default `512`.
 - `config.SUPPORTED_ASSETS`: subscribed assets.
 - `config.SUPPORTED_WINDOWS`: subscribed windows.

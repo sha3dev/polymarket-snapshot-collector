@@ -141,6 +141,7 @@ export class SnapshotQueryService {
       priceToBeat: marketRecord.priceToBeat,
       marketStart: marketRecord.marketStart,
       marketEnd: marketRecord.marketEnd,
+      prevPriceToBeat: marketRecord.prevPriceToBeat,
     };
     return marketSummary;
   }
