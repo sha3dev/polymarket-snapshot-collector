@@ -9,7 +9,7 @@ import { StateStoreService } from "../src/snapshot/state-store.service.ts";
 const BASE_SNAPSHOT: Snapshot = {
   asset: "btc",
   window: "5m",
-  generatedAt: 1741687200000,
+  generatedAt: Date.parse("2026-03-11T10:00:00.000Z"),
   marketId: "m1",
   marketSlug: "btc-5m",
   marketConditionId: "c1",
@@ -213,4 +213,44 @@ test("SnapshotCollectorService skips conflicting duplicate payloads without stop
 
   assert.deepEqual(storedSnapshotBatches, [["btc-5m"]]);
   assert.equal(stateStoreService.readState().markets[0]?.latestSnapshot?.binancePrice, 100);
+});
+
+test("SnapshotCollectorService skips snapshots at the market end timestamp", async () => {
+  const storedSnapshotBatches: string[][] = [];
+  const storedMarkets: string[] = [];
+  const stateStoreService = new StateStoreService({ staleAfterMs: 10000, supportedAssets: ["btc", "eth", "sol", "xrp"], supportedWindows: ["5m", "15m"] });
+  let listener: ((snapshot: Snapshot) => void) | null = null;
+  const snapshotCollectorService = new SnapshotCollectorService({
+    marketRepositoryService: {
+      async ensureMarketStored(snapshot: { marketSlug: string | null; asset: "btc"; window: "5m" }) {
+        storedMarkets.push(snapshot.marketSlug || "");
+        return { slug: snapshot.marketSlug || "", asset: snapshot.asset, window: snapshot.window, priceToBeat: 100, prevPriceToBeat: [99, 98], marketId: "m1", marketConditionId: "c1", marketStart: "2026-03-11T10:00:00.000Z", marketEnd: "2026-03-11T10:05:00.000Z" };
+      },
+    } as never,
+    snapshotRepositoryService: {
+      async insertSnapshots(snapshots: Array<{ marketSlug: string | null }>) {
+        storedSnapshotBatches.push(snapshots.map((snapshot) => snapshot.marketSlug || ""));
+      },
+    } as never,
+    snapshotDeduplicationService: new SnapshotDeduplicationService({ ttlMs: 120000, maxKeys: 5 }),
+    stateStoreService,
+    snapshotRuntime: {
+      addSnapshotListener(options: { listener: (snapshot: Snapshot) => void }) {
+        listener = options.listener;
+      },
+      removeSnapshotListener() {},
+      async disconnect() {},
+    },
+  });
+
+  snapshotCollectorService.start();
+  const currentListener = listener as unknown as (snapshot: Snapshot) => void;
+  currentListener(buildSnapshot({ generatedAt: Date.parse("2026-03-11T10:05:00.000Z") }));
+  await Promise.resolve();
+  await Promise.resolve();
+  await snapshotCollectorService.stop();
+
+  assert.deepEqual(storedMarkets, ["btc-5m"]);
+  assert.deepEqual(storedSnapshotBatches, []);
+  assert.equal(stateStoreService.readState().markets[0]?.snapshotCount, 0);
 });

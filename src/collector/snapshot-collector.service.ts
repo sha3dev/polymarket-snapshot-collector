@@ -129,12 +129,35 @@ export class SnapshotCollectorService {
     );
   }
 
+  private parseUtcTimestamp(value: string): number {
+    const parsedTimestamp = new Date(value).getTime();
+    return parsedTimestamp;
+  }
+
+  private isSnapshotWithinMarketWindow(snapshot: Snapshot, marketRecord: Awaited<ReturnType<MarketRepositoryService["ensureMarketStored"]>>): boolean {
+    const marketStartTimestamp = this.parseUtcTimestamp(marketRecord.marketStart);
+    const marketEndTimestamp = this.parseUtcTimestamp(marketRecord.marketEnd);
+    const isWithinMarketWindow = snapshot.generatedAt >= marketStartTimestamp && snapshot.generatedAt < marketEndTimestamp;
+    return isWithinMarketWindow;
+  }
+
+  private handleOutOfWindowSnapshot(snapshot: Snapshot, marketRecord: Awaited<ReturnType<MarketRepositoryService["ensureMarketStored"]>>): void {
+    LOGGER.warn(
+      `skipping out-of-window snapshot for ${snapshot.asset}/${snapshot.window} slug=${marketRecord.slug} generatedAt=${snapshot.generatedAt} marketStart=${marketRecord.marketStart} marketEnd=${marketRecord.marketEnd}`,
+    );
+  }
+
   private async persistCompleteSnapshot(snapshot: Snapshot): Promise<PersistedSnapshotEntry | null> {
     let persistedSnapshot: PersistedSnapshotEntry | null = null;
     const persistenceDecision = this.snapshotDeduplicationService.readPersistenceDecision(snapshot);
     if (persistenceDecision === "persist") {
       const marketRecord = await this.marketRepositoryService.ensureMarketStored(snapshot);
-      persistedSnapshot = { marketRecord, snapshot };
+      const isWithinMarketWindow = this.isSnapshotWithinMarketWindow(snapshot, marketRecord);
+      if (isWithinMarketWindow) {
+        persistedSnapshot = { marketRecord, snapshot };
+      } else {
+        this.handleOutOfWindowSnapshot(snapshot, marketRecord);
+      }
     }
     if (persistenceDecision === "conflict") {
       this.handleConflictingDuplicateSnapshot(snapshot);
