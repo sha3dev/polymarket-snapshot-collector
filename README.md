@@ -14,6 +14,10 @@ npm run start
 curl "http://localhost:3000/markets?asset=btc&window=5m"
 ```
 
+```bash
+curl "http://localhost:3000/markets"
+```
+
 ## Why
 
 - Keep Polymarket snapshot persistence in one process with one storage model.
@@ -103,8 +107,8 @@ Returns:
 
 Query params:
 
-- `asset`: required, one of `btc`, `eth`, `sol`, `xrp`
-- `window`: required, one of `5m`, `15m`
+- `asset`: optional, one of `btc`, `eth`, `sol`, `xrp`
+- `window`: optional, one of `5m`, `15m`
 - `fromDate`: optional ISO timestamp
 
 Example:
@@ -112,6 +116,21 @@ Example:
 ```bash
 curl "http://192.168.1.10:3000/markets?asset=btc&window=5m&fromDate=2026-03-11T10:00:00.000Z"
 ```
+
+```bash
+curl "http://192.168.1.10:3000/markets?asset=btc"
+```
+
+```bash
+curl "http://192.168.1.10:3000/markets"
+```
+
+Behavior notes:
+
+- when no filters are provided, the endpoint returns all stored markets
+- when only `asset` is provided, only that asset is returned across all windows
+- when only `window` is provided, only that window is returned across all assets
+- when both are provided, both filters are applied
 
 ### `GET /markets/:slug/snapshots`
 

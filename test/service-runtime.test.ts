@@ -9,12 +9,12 @@ import { SnapshotConsistencyService } from "../src/snapshot/snapshot-consistency
 import type { MarketListPayload, MarketSnapshotsPayload, StatePayload } from "../src/snapshot/snapshot.types.ts";
 
 type QueryServiceDouble = {
-  listMarkets(options: { asset: string; window: string; fromDate: string | null }): Promise<MarketListPayload>;
+  listMarkets(options: { asset: string | null; window: string | null; fromDate: string | null }): Promise<MarketListPayload>;
   readMarketSnapshots(slug: string): Promise<MarketSnapshotsPayload>;
   readState(): Promise<StatePayload>;
 };
 
-type MarketFilter = { asset: string; window: string; fromDate: string | null };
+type MarketFilter = { asset: string | null; window: string | null; fromDate: string | null };
 
 const BASE_MARKET_SNAPSHOTS_PAYLOAD: MarketSnapshotsPayload = {
   slug: "btc-5m",
@@ -140,6 +140,50 @@ test("HttpServerService returns filtered markets", async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(capturedOptions, [{ asset: "btc", window: "5m", fromDate: "2026-03-11T10:00:00.000Z" }]);
+  assert.deepEqual(json, buildMarketListPayload());
+
+  await close(server);
+});
+
+test("HttpServerService returns markets without filters", async () => {
+  const capturedOptions: MarketFilter[] = [];
+  const httpServerService = buildHttpServerService({
+    async listMarkets(options) {
+      capturedOptions.push(options);
+      return buildMarketListPayload();
+    },
+    async readMarketSnapshots() { throw new Error("not used"); },
+    async readState() { throw new Error("not used"); },
+  });
+  const server = httpServerService.buildServer();
+  const port = await listen(server);
+  const response = await fetch(`http://127.0.0.1:${port}/markets`);
+  const json = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capturedOptions, [{ asset: null, window: null, fromDate: null }]);
+  assert.deepEqual(json, buildMarketListPayload());
+
+  await close(server);
+});
+
+test("HttpServerService returns markets filtered by asset only", async () => {
+  const capturedOptions: MarketFilter[] = [];
+  const httpServerService = buildHttpServerService({
+    async listMarkets(options) {
+      capturedOptions.push(options);
+      return buildMarketListPayload();
+    },
+    async readMarketSnapshots() { throw new Error("not used"); },
+    async readState() { throw new Error("not used"); },
+  });
+  const server = httpServerService.buildServer();
+  const port = await listen(server);
+  const response = await fetch(`http://127.0.0.1:${port}/markets?asset=btc`);
+  const json = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capturedOptions, [{ asset: "btc", window: null, fromDate: null }]);
   assert.deepEqual(json, buildMarketListPayload());
 
   await close(server);

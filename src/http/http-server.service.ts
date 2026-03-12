@@ -51,18 +51,20 @@ export class HttpServerService {
    * @section private:methods
    */
 
-  private parseAsset(searchParams: URLSearchParams): "btc" | "eth" | "sol" | "xrp" {
+  private parseAsset(searchParams: URLSearchParams): "btc" | "eth" | "sol" | "xrp" | null {
     const asset = searchParams.get("asset");
-    const isValidAsset = asset === "btc" || asset === "eth" || asset === "sol" || asset === "xrp";
+    const isMissingAsset = asset === null;
+    const isValidAsset = isMissingAsset || asset === "btc" || asset === "eth" || asset === "sol" || asset === "xrp";
     if (!isValidAsset) {
       throw new HttpRequestService(400, "invalid_request", "asset must be one of btc, eth, sol, xrp");
     }
     return asset;
   }
 
-  private parseWindow(searchParams: URLSearchParams): "5m" | "15m" {
+  private parseWindow(searchParams: URLSearchParams): "5m" | "15m" | null {
     const window = searchParams.get("window");
-    const isValidWindow = window === "5m" || window === "15m";
+    const isMissingWindow = window === null;
+    const isValidWindow = isMissingWindow || window === "5m" || window === "15m";
     if (!isValidWindow) {
       throw new HttpRequestService(400, "invalid_request", "window must be one of 5m, 15m");
     }

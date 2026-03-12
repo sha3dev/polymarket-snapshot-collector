@@ -187,14 +187,15 @@ export class MarketRepositoryService {
   }
 
   public async listMarkets(options: MarketLookupOptions): Promise<MarketRecord[]> {
+    const assetClause = options.asset ? ` AND asset = ${this.buildSqlStringLiteral(options.asset)}` : "";
+    const windowClause = options.window ? ` AND window = ${this.buildSqlStringLiteral(options.window)}` : "";
     const fromDateClause = options.fromDate
       ? ` AND market_start >= toDateTime64(${this.buildSqlStringLiteral(new Date(options.fromDate).toISOString().replace("T", " ").replace("Z", ""))}, 3, 'UTC')`
       : "";
     const rows = await this.clickhouseClientService.queryJsonRows<MarketRow>(`
       SELECT slug, market_id, market_condition_id, asset, window, price_to_beat, market_start, market_end
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
-      WHERE asset = ${this.buildSqlStringLiteral(options.asset)}
-        AND window = ${this.buildSqlStringLiteral(options.window)}${fromDateClause}
+      WHERE 1 = 1${assetClause}${windowClause}${fromDateClause}
       ORDER BY market_start ASC
     `);
     const marketRecords = rows.map((row) => this.mapMarketRow(row));

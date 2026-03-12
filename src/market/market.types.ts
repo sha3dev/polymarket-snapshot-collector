@@ -19,4 +19,4 @@ export type MarketRecord = {
   marketEnd: string;
 };
 
-export type MarketLookupOptions = { asset: SnapshotAsset; window: SnapshotWindow; fromDate: string | null };
+export type MarketLookupOptions = { asset: SnapshotAsset | null; window: SnapshotWindow | null; fromDate: string | null };
