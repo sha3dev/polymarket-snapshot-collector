@@ -12,7 +12,6 @@ import type { Snapshot, SnapshotService as SnapshotServiceType } from "@sha3/pol
 import config from "../config.ts";
 import LOGGER from "../logger.ts";
 import type { MarketRepositoryService } from "../market/market-repository.service.ts";
-import type { SnapshotDeduplicationService } from "../snapshot/snapshot-deduplication.service.ts";
 import type { SnapshotRepositoryService } from "../snapshot/snapshot-repository.service.ts";
 import type { StateStoreService } from "../snapshot/state-store.service.ts";
 
@@ -24,7 +23,6 @@ type SnapshotCollectorRuntime = Pick<SnapshotServiceType, "addSnapshotListener" 
 type SnapshotCollectorServiceOptions = {
   marketRepositoryService: MarketRepositoryService;
   snapshotRepositoryService: SnapshotRepositoryService;
-  snapshotDeduplicationService: SnapshotDeduplicationService;
   stateStoreService: StateStoreService;
   snapshotRuntime: SnapshotCollectorRuntime;
 };
@@ -38,7 +36,6 @@ type QueuedSnapshotEntry = { snapshot: Snapshot };
 export class SnapshotCollectorService {
   private readonly marketRepositoryService: MarketRepositoryService;
   private readonly snapshotRepositoryService: SnapshotRepositoryService;
-  private readonly snapshotDeduplicationService: SnapshotDeduplicationService;
   private readonly stateStoreService: StateStoreService;
   private readonly snapshotRuntime: SnapshotCollectorRuntime;
   private readonly maxPersistBatchSize = config.SNAPSHOT_INSERT_BATCH_MAX_SIZE;
@@ -56,7 +53,6 @@ export class SnapshotCollectorService {
   public constructor(options: SnapshotCollectorServiceOptions) {
     this.marketRepositoryService = options.marketRepositoryService;
     this.snapshotRepositoryService = options.snapshotRepositoryService;
-    this.snapshotDeduplicationService = options.snapshotDeduplicationService;
     this.stateStoreService = options.stateStoreService;
     this.snapshotRuntime = options.snapshotRuntime;
   }
@@ -123,12 +119,6 @@ export class SnapshotCollectorService {
     LOGGER.warn(`skipping snapshot without market identity for ${snapshot.asset}/${snapshot.window} at ${snapshot.generatedAt}`);
   }
 
-  private handleConflictingDuplicateSnapshot(snapshot: Snapshot): void {
-    LOGGER.warn(
-      `skipping conflicting duplicate snapshot for ${snapshot.asset}/${snapshot.window} slug=${snapshot.marketSlug || ""} generatedAt=${snapshot.generatedAt}`,
-    );
-  }
-
   private parseUtcTimestamp(value: string): number {
     const parsedTimestamp = new Date(value).getTime();
     return parsedTimestamp;
@@ -149,18 +139,12 @@ export class SnapshotCollectorService {
 
   private async persistCompleteSnapshot(snapshot: Snapshot): Promise<PersistedSnapshotEntry | null> {
     let persistedSnapshot: PersistedSnapshotEntry | null = null;
-    const persistenceDecision = this.snapshotDeduplicationService.readPersistenceDecision(snapshot);
-    if (persistenceDecision === "persist") {
-      const marketRecord = await this.marketRepositoryService.ensureMarketStored(snapshot);
-      const isWithinMarketWindow = this.isSnapshotWithinMarketWindow(snapshot, marketRecord);
-      if (isWithinMarketWindow) {
-        persistedSnapshot = { marketRecord, snapshot };
-      } else {
-        this.handleOutOfWindowSnapshot(snapshot, marketRecord);
-      }
-    }
-    if (persistenceDecision === "conflict") {
-      this.handleConflictingDuplicateSnapshot(snapshot);
+    const marketRecord = await this.marketRepositoryService.ensureMarketStored(snapshot);
+    const isWithinMarketWindow = this.isSnapshotWithinMarketWindow(snapshot, marketRecord);
+    if (isWithinMarketWindow) {
+      persistedSnapshot = { marketRecord, snapshot };
+    } else {
+      this.handleOutOfWindowSnapshot(snapshot, marketRecord);
     }
     return persistedSnapshot;
   }

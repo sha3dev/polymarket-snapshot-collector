@@ -59,8 +59,6 @@ export type StatePayload = {
   markets: StateMarketEntry[];
 };
 
-export type SnapshotFingerprintEntry = { fingerprint: string; storedAt: number };
-
 export type SnapshotStorageRow = {
   asset: string;
   window: string;

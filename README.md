@@ -301,8 +301,6 @@ Field notes:
 - `config.SNAPSHOT_INSERT_BATCH_MAX_SIZE`: maximum number of snapshot rows grouped into one ClickHouse insert. Default `512`.
 - `config.SUPPORTED_ASSETS`: subscribed assets.
 - `config.SUPPORTED_WINDOWS`: subscribed windows.
-- `config.SNAPSHOT_DEDUPLICATION_TTL_MS`: duplicate cache TTL in milliseconds.
-- `config.SNAPSHOT_DEDUPLICATION_MAX_KEYS`: duplicate cache max size.
 
 ## Scripts
 
