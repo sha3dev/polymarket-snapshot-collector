@@ -1,8 +1,12 @@
 /**
- * @section public:properties
+ * @section class
  */
 
 export class HttpRequestService extends Error {
+  /**
+   * @section public:properties
+   */
+
   public readonly statusCode: number;
   public readonly errorCode: string;
 

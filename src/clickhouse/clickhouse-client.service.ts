@@ -19,19 +19,28 @@ type ClickhouseJsonResultSet = {
   json<T>(): Promise<T[]>;
   close(): void;
 };
+
 type ClickhouseDriver = {
   close(): Promise<void>;
   command(params: CommandParams): Promise<unknown>;
   insert<T>(params: InsertParams<unknown, T>): Promise<unknown>;
   query(params: { query: string; format: "JSONEachRow" }): Promise<ClickhouseJsonResultSet>;
 };
-type ClickhouseClientServiceOptions = { clickhouseDriver: ClickhouseDriver; databaseName: string };
+
+type ClickhouseClientServiceOptions = {
+  clickhouseDriver: ClickhouseDriver;
+  databaseName: string;
+};
 
 /**
- * @section private:properties
+ * @section class
  */
 
 export class ClickhouseClientService {
+  /**
+   * @section private:attributes
+   */
+
   private readonly clickhouseDriver: ClickhouseDriver;
   private readonly databaseName: string;
 
@@ -49,8 +58,11 @@ export class ClickhouseClientService {
    */
 
   public static createDefault(): ClickhouseClientService {
-    const clickhouseDriver = ClickhouseClientService.buildDefaultDriver();
-    return new ClickhouseClientService({ clickhouseDriver, databaseName: config.CLICKHOUSE_DATABASE });
+    const clickhouseClientService = new ClickhouseClientService({
+      clickhouseDriver: ClickhouseClientService.buildDefaultDriver(),
+      databaseName: config.CLICKHOUSE_DATABASE,
+    });
+    return clickhouseClientService;
   }
 
   /**
@@ -58,24 +70,41 @@ export class ClickhouseClientService {
    */
 
   private static buildJsonResultSet(resultSet: Awaited<ReturnType<ReturnType<typeof createClient>["query"]>>): ClickhouseJsonResultSet {
-    return { async json<T>(): Promise<T[]> { return (await resultSet.json<T>()) as T[]; }, close(): void { resultSet.close(); } };
+    const clickhouseJsonResultSet: ClickhouseJsonResultSet = {
+      async json<T>(): Promise<T[]> {
+        const rows = (await resultSet.json<T>()) as T[];
+        return rows;
+      },
+      close(): void {
+        resultSet.close();
+      },
+    };
+    return clickhouseJsonResultSet;
   }
 
   private static buildDefaultDriver(): ClickhouseDriver {
-    const clickhouseClient = createClient({ url: config.CLICKHOUSE_URL, database: config.CLICKHOUSE_DATABASE, username: config.CLICKHOUSE_USERNAME, password: config.CLICKHOUSE_PASSWORD });
+    const clickhouseClient = createClient({
+      url: config.CLICKHOUSE_URL,
+      database: config.CLICKHOUSE_DATABASE,
+      username: config.CLICKHOUSE_USER,
+      password: config.CLICKHOUSE_PASSWORD,
+    });
     const clickhouseDriver: ClickhouseDriver = {
       async close(): Promise<void> {
         await clickhouseClient.close();
       },
-      async command(params): Promise<unknown> {
-        return await clickhouseClient.command(params);
+      async command(params: CommandParams): Promise<unknown> {
+        const commandResult = await clickhouseClient.command(params);
+        return commandResult;
       },
-      async insert(params): Promise<unknown> {
-        return await clickhouseClient.insert(params);
+      async insert<T>(params: InsertParams<unknown, T>): Promise<unknown> {
+        const insertResult = await clickhouseClient.insert(params);
+        return insertResult;
       },
-      async query(params): Promise<ClickhouseJsonResultSet> {
+      async query(params: { query: string; format: "JSONEachRow" }): Promise<ClickhouseJsonResultSet> {
         const resultSet = await clickhouseClient.query({ ...params, format: "JSONEachRow" });
-        return ClickhouseClientService.buildJsonResultSet(resultSet);
+        const clickhouseJsonResultSet = ClickhouseClientService.buildJsonResultSet(resultSet);
+        return clickhouseJsonResultSet;
       },
     };
     return clickhouseDriver;
@@ -100,7 +129,11 @@ export class ClickhouseClientService {
 
   public async insertJsonRows<RowShape extends Record<string, unknown>>(tableName: string, rows: readonly RowShape[]): Promise<void> {
     const qualifiedTableName = this.buildQualifiedTableName(tableName);
-    await this.clickhouseDriver.insert({ table: qualifiedTableName, values: [...rows], format: "JSONEachRow" });
+    await this.clickhouseDriver.insert({
+      table: qualifiedTableName,
+      values: [...rows],
+      format: "JSONEachRow",
+    });
   }
 
   public async queryJsonRows<RowShape extends Record<string, unknown>>(query: string): Promise<RowShape[]> {

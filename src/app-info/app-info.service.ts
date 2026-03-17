@@ -13,10 +13,14 @@ export type AppInfoPayload = { ok: true; serviceName: string };
 type AppInfoServiceOptions = { serviceName: string };
 
 /**
- * @section public:properties
+ * @section class
  */
 
 export class AppInfoService {
+  /**
+   * @section private:attributes
+   */
+
   private readonly serviceName: string;
 
   /**

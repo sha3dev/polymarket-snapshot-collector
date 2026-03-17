@@ -1,6 +1,6 @@
 # @sha3/polymarket-snapshot-collector
 
-Internal service that subscribes to `@sha3/polymarket-snapshot`, stores full snapshots in ClickHouse, and exposes a small HTTP API for market discovery, historical snapshot retrieval, and current in-memory state.
+Internal HTTP service that subscribes to `@sha3/polymarket-snapshot`, persists each flat snapshot into ClickHouse, keeps a lightweight market catalog, and exposes historical snapshot reads by date range.
 
 ## TL;DR
 
@@ -11,27 +11,26 @@ npm run start
 ```
 
 ```bash
-curl "http://localhost:3000/markets?asset=btc&window=5m"
-```
-
-```bash
-curl "http://localhost:3000/markets"
+curl "http://localhost:3000/snapshots?fromDate=2026-03-11T10:00:00.000Z&toDate=2026-03-11T10:15:00.000Z&marketSlug=btc-5m-example"
 ```
 
 ## Why
 
-- Keep Polymarket snapshot persistence in one process with one storage model.
-- Keep market metadata in `market` and store only time-varying snapshot fields in `snapshot`.
-- Expose a simple internal API for market lists, stored snapshot playback, and current in-memory state.
+Use this service when you want one collector process that:
+
+- receives the full upstream flat snapshot contract,
+- stores it as one ClickHouse row per instant,
+- preserves the legacy historical model through a first-boot migration,
+- and exposes one simple read API instead of rebuilding market-specific snapshot tables.
 
 ## Main Capabilities
 
-- Creates `market` and `snapshot` tables on startup when they do not exist.
-- Subscribes internally to the configured asset and window pairs.
-- Prevents duplicate writes for the same canonical snapshot identity with a short in-memory deduplication cache.
-- Warns and skips conflicting duplicate payloads when the same canonical identity is received again with different data.
-- Stores stable market metadata once in `market` and avoids repeating it in every snapshot row.
-- Exposes HTTP endpoints for market listing, snapshot retrieval, and current in-memory state.
+- Creates the `market`, legacy `snapshot`, `snapshot_v2`, and `migration_state` tables on startup when they do not exist.
+- Subscribes to `@sha3/polymarket-snapshot` and batch-inserts flat snapshots into `snapshot_v2`.
+- Stores one catalog row per discovered live market slug in `market`.
+- Exposes `GET /markets` for market discovery.
+- Exposes `GET /snapshots` for historical range reads, optionally filtered by `marketSlug`.
+- Supports `npm run migrate`, which starts the service normally and backfills legacy rows into `snapshot_v2` in the background.
 
 ## Installation
 
@@ -39,28 +38,39 @@ curl "http://localhost:3000/markets"
 npm install
 ```
 
+## Setup
+
+Create a `.env` file when you need non-default runtime values:
+
+```dotenv
+HTTP_PORT=3000
+CLICKHOUSE_URL=http://localhost:8123
+CLICKHOUSE_USER=default
+CLICKHOUSE_PASSWORD=default
+CLICKHOUSE_DATABASE=default
+```
+
 ## Running Locally
+
+Normal runtime:
 
 ```bash
 npm run start
 ```
 
-Defaults:
-
-- HTTP bind: `0.0.0.0:3000`
-- ClickHouse: `http://localhost:8123`
-- ClickHouse user: `default`
-- ClickHouse password: `default`
-
-Because the service binds to `0.0.0.0`, it can be called from other machines in the same internal network by using the host machine IP address.
-
-Use the LAN ClickHouse instance when needed:
+Runtime with first-boot migration enabled:
 
 ```bash
-CLICKHOUSE_URL=http://192.168.1.2:8123 npm run start
+npm run migrate
 ```
 
+Default bind:
+
+- `http://0.0.0.0:3000`
+
 ## Usage
+
+Start the normal runtime:
 
 ```ts
 import { ServiceRuntime } from "@sha3/polymarket-snapshot-collector";
@@ -69,9 +79,18 @@ const serviceRuntime = ServiceRuntime.createDefault();
 await serviceRuntime.startServer();
 ```
 
+Start the runtime with background legacy migration:
+
+```ts
+import { ServiceRuntime } from "@sha3/polymarket-snapshot-collector";
+
+const serviceRuntime = ServiceRuntime.createMigrationRuntime();
+await serviceRuntime.startServer();
+```
+
 ## Examples
 
-Build the server without binding:
+Build the HTTP server without listening:
 
 ```ts
 import { ServiceRuntime } from "@sha3/polymarket-snapshot-collector";
@@ -80,14 +99,22 @@ const serviceRuntime = ServiceRuntime.createDefault();
 const server = serviceRuntime.buildServer();
 ```
 
-Stop the runtime cleanly:
+List discovered markets:
 
-```ts
-import { ServiceRuntime } from "@sha3/polymarket-snapshot-collector";
+```bash
+curl "http://localhost:3000/markets?asset=btc&window=5m"
+```
 
-const serviceRuntime = ServiceRuntime.createDefault();
-await serviceRuntime.startServer();
-await serviceRuntime.stop();
+Read snapshots for a time range:
+
+```bash
+curl "http://localhost:3000/snapshots?fromDate=2026-03-11T10:00:00.000Z&toDate=2026-03-11T10:15:00.000Z"
+```
+
+Read only snapshots that include a specific market slug:
+
+```bash
+curl "http://localhost:3000/snapshots?fromDate=2026-03-11T10:00:00.000Z&toDate=2026-03-11T10:15:00.000Z&marketSlug=btc-5m-example"
 ```
 
 ## HTTP API
@@ -109,64 +136,77 @@ Query params:
 
 - `asset`: optional, one of `btc`, `eth`, `sol`, `xrp`
 - `window`: optional, one of `5m`, `15m`
-- `fromDate`: optional ISO timestamp
+- `fromDate`: optional ISO-8601 timestamp
 
-Example:
+Returns:
 
-```bash
-curl "http://192.168.1.10:3000/markets?asset=btc&window=5m&fromDate=2026-03-11T10:00:00.000Z"
-```
-
-```bash
-curl "http://192.168.1.10:3000/markets?asset=btc"
-```
-
-```bash
-curl "http://192.168.1.10:3000/markets"
-```
-
-Behavior notes:
-
-- when no filters are provided, the endpoint returns all stored markets
-- when only `asset` is provided, only that asset is returned across all windows
-- when only `window` is provided, only that window is returned across all assets
-- when both are provided, both filters are applied
-- each returned market includes `prevPriceToBeat`, containing the latest configured previous `priceToBeat` closes for the same `asset/window`
-
-### `GET /markets/:slug/snapshots`
-
-Example:
-
-```bash
-curl "http://192.168.1.10:3000/markets/btc-5m-example/snapshots"
+```json
+{
+  "markets": [
+    {
+      "slug": "btc-5m-example",
+      "asset": "btc",
+      "window": "5m",
+      "priceToBeat": 100123.45,
+      "marketStart": "2026-03-11T10:00:00.000Z",
+      "marketEnd": "2026-03-11T10:05:00.000Z"
+    }
+  ]
+}
 ```
 
 Behavior notes:
 
-- rows are returned in ascending `generatedAt`
-- `5m` markets may contain at most `600` snapshots
-- `15m` markets may contain at most `1800` snapshots
+- returns one lightweight row per discovered slug
+- does not expose market ids or condition ids
+- reads only from the `market` catalog table
 
-### `GET /state`
+### `GET /snapshots`
 
-Returns the current in-memory state for all supported `asset/window` pairs.
+Query params:
+
+- `fromDate`: required ISO-8601 timestamp
+- `toDate`: required ISO-8601 timestamp
+- `limit`: optional integer, default `1000`, max `5000`
+- `marketSlug`: optional non-empty slug string
+
+Returns:
+
+```json
+{
+  "fromDate": "2026-03-11T10:00:00.000Z",
+  "toDate": "2026-03-11T10:15:00.000Z",
+  "marketSlug": "btc-5m-example",
+  "snapshots": [
+    {
+      "id": "4a7b2c2b-e2b4-48a2-a7d3-7f59aef8a8ae",
+      "generated_at": 1773223200000,
+      "btc_binance_price": 100123.45,
+      "btc_5m_slug": "btc-5m-example",
+      "btc_5m_market_start": "2026-03-11T10:00:00.000Z",
+      "btc_5m_market_end": "2026-03-11T10:05:00.000Z",
+      "btc_5m_price_to_beat": 100100.0,
+      "inserted_at": "2026-03-11T10:00:00.123Z"
+    }
+  ]
+}
+```
 
 Behavior notes:
 
-- memory-backed, not reconstructed from ClickHouse
-- always returns exactly `8` entries in `markets`
-- entry order is stable: `btc/5m`, `btc/15m`, `eth/5m`, `eth/15m`, `sol/5m`, `sol/15m`, `xrp/5m`, `xrp/15m`
-- entries with no active market still exist with `market: null` and `latestSnapshot: null`
-
-Example:
-
-```bash
-curl "http://192.168.1.10:3000/state"
-```
+- rows are sorted ascending by `generated_at`
+- when `marketSlug` is present, the service returns only snapshots where any supported pair slug field equals that value
+- the response preserves upstream field names exactly
 
 ## Public API
 
 ### `ServiceRuntime`
+
+Primary runtime entrypoint for composing or starting the service.
+
+```ts
+import { ServiceRuntime } from "@sha3/polymarket-snapshot-collector";
+```
 
 #### `createDefault()`
 
@@ -176,9 +216,17 @@ Returns:
 
 - `ServiceRuntime`
 
+#### `createMigrationRuntime()`
+
+Builds the runtime wiring with background legacy migration enabled.
+
+Returns:
+
+- `ServiceRuntime`
+
 #### `buildServer()`
 
-Builds the Hono-based Node HTTP server without calling `listen()`.
+Builds the Node HTTP server without binding a port.
 
 Returns:
 
@@ -186,7 +234,7 @@ Returns:
 
 #### `startServer()`
 
-Creates schema, starts the collector, and starts listening on the configured host and port.
+Creates schema, starts the collector, starts listening, and launches background migration when the runtime was created with `createMigrationRuntime()`.
 
 Returns:
 
@@ -194,7 +242,7 @@ Returns:
 
 #### `stop()`
 
-Stops the HTTP server, disconnects the collector runtime, and closes the ClickHouse client.
+Stops the HTTP server, collector, migration task, and ClickHouse client.
 
 Returns:
 
@@ -211,12 +259,11 @@ type AppInfoPayload = { ok: true; serviceName: string };
 ```ts
 type MarketSummary = {
   slug: string;
-  window: "5m" | "15m";
   asset: "btc" | "eth" | "sol" | "xrp";
+  window: "5m" | "15m";
   priceToBeat: number | null;
   marketStart: string;
   marketEnd: string;
-  prevPriceToBeat: number[];
 };
 ```
 
@@ -226,124 +273,144 @@ type MarketSummary = {
 type MarketListPayload = { markets: MarketSummary[] };
 ```
 
-### `MarketSnapshotsPayload`
+### `StoredSnapshot`
 
 ```ts
-type MarketSnapshotsPayload = {
-  slug: string;
-  asset: "btc" | "eth" | "sol" | "xrp";
-  window: "5m" | "15m";
-  marketStart: string;
-  marketEnd: string;
-  snapshots: Snapshot[];
-};
+type StoredSnapshot = {
+  id: string;
+  generated_at: number;
+  inserted_at: string;
+} & Record<string, number | string | null>;
 ```
 
-### `StatePayload`
+### `SnapshotRangePayload`
 
 ```ts
-type StatePayload = {
-  generatedAt: string;
-  markets: Array<{
-    asset: "btc" | "eth" | "sol" | "xrp";
-    window: "5m" | "15m";
-    market: MarketSummary | null;
-    snapshotCount: number;
-    latestSnapshot: {
-      generatedAt: number;
-      priceToBeat: number | null;
-      upPrice: number | null;
-      downPrice: number | null;
-      chainlinkPrice: number | null;
-      binancePrice: number | null;
-      coinbasePrice: number | null;
-      krakenPrice: number | null;
-      okxPrice: number | null;
-    } | null;
-    marketDirection: "UP" | "DOWN" | "UNKNOWN";
-    latestSnapshotAgeMs: number | null;
-    isStale: boolean;
-  }>;
+type SnapshotRangePayload = {
+  fromDate: string;
+  toDate: string;
+  marketSlug: string | null;
+  snapshots: StoredSnapshot[];
 };
 ```
-
-Field notes:
-
-- `generatedAt`: server-side timestamp for the state payload
-- `markets`: stable list of one entry per supported `asset/window`
-- `snapshotCount`: number of snapshots seen for the currently active market in that entry
-- `latestSnapshot`: latest successfully ingested snapshot summary for that entry
-- `marketDirection`: derived from `chainlinkPrice` versus `priceToBeat`
-- `latestSnapshotAgeMs`: age of the latest snapshot when the payload was produced
-- `isStale`: whether the entry has no latest snapshot or the latest snapshot age exceeds the configured stale threshold
 
 ## Compatibility
 
 - Node.js 20+
-- ESM
-- TypeScript with relative `.ts` imports enabled
+- ESM (`"type": "module"`)
+- ClickHouse with `MergeTree` support
+- Flat upstream snapshots from `@sha3/polymarket-snapshot@2.2.0`
+
+## Storage Model
+
+### `snapshot_v2`
+
+Primary table for the flat upstream snapshot contract.
+
+- one row per `generated_at`
+- stores all upstream fields as explicit columns
+- partitioned by `toDate(generated_at)`
+
+### `market`
+
+Lightweight discovery table.
+
+- one row per discovered slug
+- stores `slug`, `asset`, `window`, `price_to_beat`, `market_start`, `market_end`
+
+### `snapshot`
+
+Legacy table kept only as the migration source.
+
+### `migration_state`
+
+Temporary state table used to resume the first historical backfill.
+
+## Migration
+
+`npm run migrate` does two things at the same time:
+
+1. starts the service normally,
+2. backfills historical legacy `snapshot` rows into `snapshot_v2` in the background.
+
+Migration behavior:
+
+- reads only legacy rows with `generated_at` strictly before the current UTC day
+- converts old per-pair rows into one flat row per `generated_at`
+- joins legacy `market` rows only to recover `price_to_beat`, `market_start`, and `market_end`
+- resumes from `migration_state` after restart
 
 ## Configuration
 
-- `config.RESPONSE_CONTENT_TYPE`: response `content-type` header.
-- `config.HTTP_HOST`: bind host for `startServer()`. Default is `0.0.0.0` so the API is reachable from other internal hosts.
-- `config.DEFAULT_PORT`: bind port for `startServer()`.
-- `config.SERVICE_NAME`: service name returned by `GET /`.
-- `config.CLICKHOUSE_URL`: ClickHouse base URL.
-- `config.CLICKHOUSE_DATABASE`: ClickHouse database name.
-- `config.CLICKHOUSE_USERNAME`: ClickHouse username.
-- `config.CLICKHOUSE_PASSWORD`: ClickHouse password.
-- `config.CLICKHOUSE_MARKET_TABLE`: market table name.
-- `config.CLICKHOUSE_SNAPSHOT_TABLE`: snapshot table name.
-- `config.SNAPSHOT_INTERVAL_MS`: polling interval passed to `@sha3/polymarket-snapshot`.
-- `config.STATE_STALE_AFTER_MS`: age threshold used to mark state entries as stale. Default `1000` ms.
-- `config.MARKET_RECENT_HISTORY_LIMIT`: number of previous `priceToBeat` closes stored in `prevPriceToBeat` for each market. Default `3`.
-- `config.SNAPSHOT_INSERT_BATCH_MAX_SIZE`: maximum number of snapshot rows grouped into one ClickHouse insert. Default `512`.
-- `config.SUPPORTED_ASSETS`: subscribed assets.
-- `config.SUPPORTED_WINDOWS`: subscribed windows.
+Configuration lives in [`src/config.ts`](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/config.ts).
+
+- `RESPONSE_CONTENT_TYPE`: HTTP response `content-type` header.
+- `HTTP_HOST`: interface used by the HTTP server.
+- `HTTP_PORT`: listening port used by `startServer()`.
+- `SERVICE_NAME`: name returned by `GET /`.
+- `CLICKHOUSE_URL`: ClickHouse server URL.
+- `CLICKHOUSE_USER`: ClickHouse username.
+- `CLICKHOUSE_PASSWORD`: ClickHouse password.
+- `CLICKHOUSE_DATABASE`: ClickHouse database name.
+- `CLICKHOUSE_MARKET_TABLE`: table name for the lightweight market catalog.
+- `CLICKHOUSE_LEGACY_SNAPSHOT_TABLE`: legacy snapshot table name used as migration source.
+- `CLICKHOUSE_SNAPSHOT_TABLE`: flat snapshot target table name.
+- `CLICKHOUSE_MIGRATION_STATE_TABLE`: migration state table name.
+- `SUPPORTED_ASSETS`: comma-separated supported assets list.
+- `SUPPORTED_WINDOWS`: comma-separated supported market windows list.
+- `SNAPSHOT_INTERVAL_MS`: polling interval passed to `@sha3/polymarket-snapshot`.
+- `SNAPSHOT_BATCH_SIZE`: maximum batch size written to ClickHouse in one insert.
+- `SNAPSHOT_FLUSH_INTERVAL_MS`: maximum time the collector waits before flushing a partial batch.
 
 ## Scripts
 
-- `npm run standards:check`
-- `npm run lint`
-- `npm run format:check`
-- `npm run typecheck`
-- `npm run test`
-- `npm run check`
-- `npm run start`
+- `npm run start`: start the service runtime
+- `npm run migrate`: start the service runtime with background legacy migration
+- `npm run build`: compile to `dist/`
+- `npm run standards:check`: run `code-standards verify`
+- `npm run lint`: run Biome checks
+- `npm run format:check`: run Biome formatter checks
+- `npm run typecheck`: run `tsc --noEmit`
+- `npm run test`: run the Node test suite
+- `npm run check`: run the full blocking quality gate
 
 ## Structure
 
-- `src/app/service-runtime.service.ts`: runtime orchestration
-- `src/clickhouse/`: ClickHouse client and schema services
-- `src/collector/`: snapshot collector runtime
-- `src/http/`: HTTP server and request error mapping
-- `src/market/`: market persistence repository
-- `src/snapshot/`: snapshot persistence, query logic, deduplication, in-memory state store, and exported payload types
-- `test/`: deterministic node:test coverage
+- [src/config.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/config.ts): canonical runtime configuration
+- [src/clickhouse/clickhouse-client.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/clickhouse/clickhouse-client.service.ts): thin ClickHouse wrapper
+- [src/clickhouse/clickhouse-schema.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/clickhouse/clickhouse-schema.service.ts): schema creation
+- [src/collector/snapshot-collector.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/collector/snapshot-collector.service.ts): snapshot subscription and batching
+- [src/market/market-repository.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/market/market-repository.service.ts): lightweight market catalog persistence
+- [src/market/market-sync.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/market/market-sync.service.ts): market discovery from incoming snapshots
+- [src/snapshot/flat-snapshot-repository.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/snapshot/flat-snapshot-repository.service.ts): flat snapshot persistence and reads
+- [src/snapshot/snapshot-query.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/snapshot/snapshot-query.service.ts): query use cases
+- [src/migration/migration-repository.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/migration/migration-repository.service.ts): SQL-first legacy migration
+- [src/migration/migration-orchestrator.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/migration/migration-orchestrator.service.ts): resumable migration orchestration
+- [src/http/http-server.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/http/http-server.service.ts): HTTP API
+- [src/app/service-runtime.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/app/service-runtime.service.ts): runtime composition
 
 ## Troubleshooting
 
 ### ClickHouse connection failures
 
-Verify `CLICKHOUSE_URL`, `CLICKHOUSE_USERNAME`, and `CLICKHOUSE_PASSWORD`. To use the LAN instance set `CLICKHOUSE_URL=http://192.168.1.2:8123`.
+Verify:
 
-### API is not reachable from another machine
+- `CLICKHOUSE_URL`
+- `CLICKHOUSE_USER`
+- `CLICKHOUSE_PASSWORD`
+- `CLICKHOUSE_DATABASE`
 
-Verify that `HTTP_HOST` is still `0.0.0.0` and that the machine firewall allows inbound traffic on the configured port.
+### Empty `/markets` response
 
-### Duplicate snapshot writes
+The catalog is populated only when incoming snapshots include live slug, start, and end fields for a pair.
 
-The canonical identity is `market_slug + asset + window + generated_at`. The service prevents duplicate writes in the ingestion path with a short in-memory deduplication cache and skips conflicting duplicate payloads with a warning.
+### Migration not progressing
 
-ClickHouse `MergeTree` ordering keys are not unique constraints, so the storage engine does not enforce row uniqueness by itself. If duplicate rows already exist because data was inserted outside this service or before deduplication was in place, clean that data from ClickHouse before relying on the API responses.
-
-### Snapshot count consistency failures
-
-`5m` markets must stay at or below `600` rows and `15m` markets must stay at or below `1800` rows.
+Check the `migration_state` table and the service logs. The migration skips the current UTC day by design.
 
 ## AI Workflow
 
-- Read `AGENTS.md`, `ai/contract.json`, and the assistant adapter before editing code.
-- Keep managed files read-only unless the task is a standards update.
+- Read `AGENTS.md`, `ai/contract.json`, and the relevant `ai/<assistant>.md` before editing.
+- Keep managed files read-only unless the task explicitly requires a standards update.
+- Treat the legacy code under `.code-standards/refactor-source/` as reference only.
 - Run `npm run standards:check` and `npm run check` before finishing.

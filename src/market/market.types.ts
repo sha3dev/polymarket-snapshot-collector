@@ -2,7 +2,7 @@
  * @section imports:externals
  */
 
-import type { SnapshotAsset, SnapshotWindow } from "@sha3/polymarket-snapshot";
+import type { CryptoMarketWindow, CryptoSymbol } from "@sha3/polymarket";
 
 /**
  * @section types
@@ -10,14 +10,24 @@ import type { SnapshotAsset, SnapshotWindow } from "@sha3/polymarket-snapshot";
 
 export type MarketRecord = {
   slug: string;
-  marketId: string | null;
-  marketConditionId: string | null;
-  asset: SnapshotAsset;
-  window: SnapshotWindow;
+  asset: CryptoSymbol;
+  window: CryptoMarketWindow;
   priceToBeat: number | null;
-  prevPriceToBeat: number[];
   marketStart: string;
   marketEnd: string;
 };
 
-export type MarketLookupOptions = { asset: SnapshotAsset | null; window: SnapshotWindow | null; fromDate: string | null };
+export type MarketLookupOptions = {
+  asset: CryptoSymbol | null;
+  window: CryptoMarketWindow | null;
+  fromDate: string | null;
+};
+
+export type MarketSnapshotRecord = {
+  slug: string;
+  asset: CryptoSymbol;
+  window: CryptoMarketWindow;
+  priceToBeat: number | null;
+  marketStart: string;
+  marketEnd: string;
+};

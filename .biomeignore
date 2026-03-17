@@ -2,12 +2,3 @@ node_modules
 dist
 coverage
 .code-standards
-ai/contract.json
-src/app/service-runtime.service.ts
-src/clickhouse/clickhouse-client.service.ts
-src/collector/snapshot-collector.service.ts
-src/http/http-server.service.ts
-src/snapshot/snapshot-repository.service.ts
-test/repository.test.ts
-test/service-runtime.test.ts
-test/snapshot-collector.test.ts

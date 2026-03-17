@@ -3,9 +3,29 @@
  */
 
 import config from "../config.ts";
+import type { SnapshotFieldCatalogService } from "../snapshot/snapshot-field-catalog.service.ts";
 import type { ClickhouseClientService } from "./clickhouse-client.service.ts";
 
-const SNAPSHOT_COLUMN_DEFINITIONS = [
+/**
+ * @section types
+ */
+
+type ClickhouseSchemaServiceOptions = {
+  clickhouseClientService: ClickhouseClientService;
+  snapshotFieldCatalogService: SnapshotFieldCatalogService;
+};
+
+const MARKET_TABLE_COLUMNS = [
+  "slug String",
+  "asset LowCardinality(String)",
+  "window LowCardinality(String)",
+  "price_to_beat Nullable(Float64)",
+  "market_start DateTime64(3, 'UTC')",
+  "market_end DateTime64(3, 'UTC')",
+  "inserted_at DateTime64(3, 'UTC')",
+].join(",\n        ");
+
+const LEGACY_SNAPSHOT_COLUMNS = [
   "asset LowCardinality(String)",
   "window LowCardinality(String)",
   "market_slug String",
@@ -36,18 +56,26 @@ const SNAPSHOT_COLUMN_DEFINITIONS = [
   "inserted_at DateTime64(3, 'UTC')",
 ].join(",\n        ");
 
-/**
- * @section types
- */
+const MIGRATION_STATE_COLUMNS = [
+  "migration_name String",
+  "phase LowCardinality(String)",
+  "last_completed_day Nullable(Date)",
+  "is_completed UInt8",
+  "error_message Nullable(String)",
+  "updated_at DateTime64(3, 'UTC')",
+].join(",\n        ");
 
-type ClickhouseSchemaServiceOptions = { clickhouseClientService: ClickhouseClientService };
-
 /**
- * @section private:properties
+ * @section class
  */
 
 export class ClickhouseSchemaService {
+  /**
+   * @section private:attributes
+   */
+
   private readonly clickhouseClientService: ClickhouseClientService;
+  private readonly snapshotFieldCatalogService: SnapshotFieldCatalogService;
 
   /**
    * @section constructor
@@ -55,40 +83,25 @@ export class ClickhouseSchemaService {
 
   public constructor(options: ClickhouseSchemaServiceOptions) {
     this.clickhouseClientService = options.clickhouseClientService;
+    this.snapshotFieldCatalogService = options.snapshotFieldCatalogService;
   }
 
   /**
    * @section private:methods
    */
 
-  private buildCreateMarketTableQuery(): string {
+  private buildCreateSnapshotTableQuery(): string {
+    const snapshotColumnDefinitions = this.snapshotFieldCatalogService.readSnapshotColumnDefinitions().join(",\n        ");
     const query = `
-      CREATE TABLE IF NOT EXISTS ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE} (
-        slug String,
-        market_id Nullable(String),
-        market_condition_id Nullable(String),
-        asset LowCardinality(String),
-        window LowCardinality(String),
-        price_to_beat Nullable(Float64),
-        prev_price_to_beat Array(Float64),
-        market_start DateTime64(3, 'UTC'),
-        market_end DateTime64(3, 'UTC'),
+      CREATE TABLE IF NOT EXISTS ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_SNAPSHOT_TABLE} (
+        id UUID,
+        generated_at DateTime64(3, 'UTC'),
+        ${snapshotColumnDefinitions},
         inserted_at DateTime64(3, 'UTC')
       )
       ENGINE = MergeTree
-      ORDER BY (asset, window, market_start, slug)
-    `;
-    return query;
-  }
-
-  private buildCreateSnapshotTableQuery(): string {
-    const query = `
-      CREATE TABLE IF NOT EXISTS ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_SNAPSHOT_TABLE} (
-        ${SNAPSHOT_COLUMN_DEFINITIONS}
-      )
-      ENGINE = MergeTree
       PARTITION BY toDate(generated_at)
-      ORDER BY (market_slug, generated_at, asset, window)
+      ORDER BY (generated_at, id)
     `;
     return query;
   }
@@ -98,7 +111,33 @@ export class ClickhouseSchemaService {
    */
 
   public async ensureSchema(): Promise<void> {
-    await this.clickhouseClientService.command(this.buildCreateMarketTableQuery());
-    await this.clickhouseClientService.command(this.buildCreateSnapshotTableQuery());
+    const schemaQueries = [
+      `
+        CREATE TABLE IF NOT EXISTS ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE} (
+          ${MARKET_TABLE_COLUMNS}
+        )
+        ENGINE = MergeTree
+        ORDER BY (asset, window, market_start, slug)
+      `,
+      `
+        CREATE TABLE IF NOT EXISTS ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_LEGACY_SNAPSHOT_TABLE} (
+          ${LEGACY_SNAPSHOT_COLUMNS}
+        )
+        ENGINE = MergeTree
+        PARTITION BY toDate(generated_at)
+        ORDER BY (market_slug, generated_at, asset, window)
+      `,
+      this.buildCreateSnapshotTableQuery(),
+      `
+        CREATE TABLE IF NOT EXISTS ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MIGRATION_STATE_TABLE} (
+          ${MIGRATION_STATE_COLUMNS}
+        )
+        ENGINE = MergeTree
+        ORDER BY (migration_name, updated_at)
+      `,
+    ];
+    for (const schemaQuery of schemaQueries) {
+      await this.clickhouseClientService.command(schemaQuery);
+    }
   }
 }

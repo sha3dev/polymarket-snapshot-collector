@@ -1,6 +1,6 @@
 {
   "formatVersion": "v1",
-  "generatedByVersion": "0.34.0",
+  "generatedByVersion": "0.39.0",
   "project": {
     "name": "polymarket-snapshot-collector",
     "template": "node-service",
@@ -25,9 +25,9 @@
       "imports:internals",
       "consts",
       "types",
+      "class",
       "private:attributes",
       "protected:attributes",
-      "private:properties",
       "public:properties",
       "constructor",
       "static:properties",
@@ -92,24 +92,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/returns-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/returns-bad.ts"
-        ]
+        "good": ["ai/examples/rules/returns-good.ts"],
+        "bad": ["ai/examples/rules/returns-bad.ts"]
       }
     },
     {
@@ -122,24 +112,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/async-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/async-bad.ts"
-        ]
+        "good": ["ai/examples/rules/async-good.ts"],
+        "bad": ["ai/examples/rules/async-bad.ts"]
       }
     },
     {
@@ -152,24 +132,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/class-first-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/class-first-bad.ts"
-        ]
+        "good": ["ai/examples/rules/class-first-good.ts"],
+        "bad": ["ai/examples/rules/class-first-bad.ts"]
       }
     },
     {
@@ -182,24 +152,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/*/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/*/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/demo/src/invoice/invoice.service.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/class-first-bad.ts"
-        ]
+        "good": ["ai/examples/demo/src/invoice/invoice.service.ts"],
+        "bad": ["ai/examples/rules/class-first-bad.ts"]
       }
     },
     {
@@ -212,26 +172,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "text",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/class-first-good.ts",
-          "ai/examples/rules/constructor-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/class-first-bad.ts",
-          "ai/examples/rules/constructor-bad.ts"
-        ]
+        "good": ["ai/examples/rules/class-first-good.ts", "ai/examples/rules/constructor-good.ts"],
+        "bad": ["ai/examples/rules/class-first-bad.ts", "ai/examples/rules/constructor-bad.ts"]
       }
     },
     {
@@ -244,22 +192,13 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/demo/src/billing/billing.service.ts",
-          "ai/examples/demo/src/invoice/invoice.service.ts"
-        ],
+        "good": ["ai/examples/demo/src/billing/billing.service.ts", "ai/examples/demo/src/invoice/invoice.service.ts"],
         "bad": []
       }
     },
@@ -273,25 +212,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/functions-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/functions-bad.ts"
-        ]
+        "good": ["ai/examples/rules/functions-good.ts"],
+        "bad": ["ai/examples/rules/functions-bad.ts"]
       }
     },
     {
@@ -304,25 +232,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/functions-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/functions-bad.ts"
-        ]
+        "good": ["ai/examples/rules/functions-good.ts"],
+        "bad": ["ai/examples/rules/functions-bad.ts"]
       }
     },
     {
@@ -335,26 +252,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "filesystem",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier",
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier", "project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/demo/src/invoice/invoice.service.ts",
-          "ai/examples/demo/src/invoice/invoice.types.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/class-first-bad.ts"
-        ]
+        "good": ["ai/examples/demo/src/invoice/invoice.service.ts", "ai/examples/demo/src/invoice/invoice.types.ts"],
+        "bad": ["ai/examples/rules/class-first-bad.ts"]
       }
     },
     {
@@ -367,17 +272,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "source-rule-verifier"
-      ],
+      "implementedBy": ["source-rule-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -393,23 +292,13 @@
       "verificationMode": "deterministic",
       "verificationSource": "filesystem",
       "blocking": true,
-      "implementedBy": [
-        "project-verifier"
-      ],
+      "implementedBy": ["project-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*",
-        "test/**/*"
-      ],
-      "enforcedBy": [
-        "verify",
-        "biome"
-      ],
+      "appliesTo": ["src/**/*", "test/**/*"],
+      "enforcedBy": ["verify", "biome"],
       "examples": {
-        "good": [
-          "ai/examples/rules/functions-good.ts"
-        ],
+        "good": ["ai/examples/rules/functions-good.ts"],
         "bad": []
       }
     },
@@ -423,18 +312,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "filesystem",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*",
-        "test/**/*"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*", "test/**/*"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -450,17 +332,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "filesystem",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/*"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/*"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -476,18 +352,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "filesystem",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier",
-        "testing-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier", "testing-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -496,25 +365,18 @@
     {
       "id": "module-constant-case",
       "title": "Module Constant Case",
-      "summary": "Module-level constants must use SCREAMING_SNAKE_CASE except for the canonical config export.",
+      "summary": "Module-level constants must use SCREAMING_SNAKE_CASE except for the canonical config and logger exports.",
       "severity": "blocking-deterministic",
       "kind": "style",
       "deterministic": true,
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -530,18 +392,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -557,21 +412,13 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/config.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/config.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/demo/src/config.ts"
-        ],
+        "good": ["ai/examples/demo/src/config.ts"],
         "bad": []
       }
     },
@@ -585,18 +432,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -612,17 +452,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -638,18 +472,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -665,17 +492,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -691,49 +512,31 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/control-flow-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/control-flow-bad.ts"
-        ]
+        "good": ["ai/examples/rules/control-flow-good.ts"],
+        "bad": ["ai/examples/rules/control-flow-bad.ts"]
       }
     },
     {
       "id": "concise-simple-callbacks",
       "title": "Concise Simple Callbacks",
-      "summary": "Simple callbacks must use concise arrow expressions instead of block bodies with an explicit return.",
-      "severity": "blocking-deterministic",
+      "summary": "Prefer concise arrow callbacks when Biome already keeps them concise; do not rewrite formatter-stable block callbacks just for style.",
+      "severity": "guidance",
       "kind": "style",
-      "deterministic": true,
-      "verificationMode": "deterministic",
-      "verificationSource": "ast",
-      "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "deterministic": false,
+      "verificationMode": "heuristic",
+      "verificationSource": "combined",
+      "blocking": false,
+      "implementedBy": ["policy-guidance"],
       "requiresContext": "full-project",
-      "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "confidence": "medium",
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["guidance"],
       "examples": {
         "good": [],
         "bad": []
@@ -742,25 +545,18 @@
     {
       "id": "compact-single-line-constructs",
       "title": "Compact Single Line Constructs",
-      "summary": "Declarations, calls, imports, arrays, and objects that fit on one line should not be spread across multiple lines.",
+      "summary": "Prefer compact layouts, but let Biome decide final wrapping instead of forcing single-line constructs the formatter keeps multiline.",
       "severity": "guidance",
       "kind": "style",
       "deterministic": false,
       "verificationMode": "heuristic",
       "verificationSource": "combined",
-      "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "blocking": false,
+      "implementedBy": ["policy-guidance"],
       "requiresContext": "full-project",
-      "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "confidence": "medium",
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["guidance"],
       "examples": {
         "good": [],
         "bad": []
@@ -776,17 +572,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "filesystem",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -802,18 +592,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/app/**",
-        "src/shared/**"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/app/**", "src/shared/**"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -829,17 +612,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -855,17 +632,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.types.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.types.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -881,17 +652,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "filesystem",
       "blocking": true,
-      "implementedBy": [
-        "project-layout-verifier"
-      ],
+      "implementedBy": ["project-layout-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -907,24 +672,14 @@
       "verificationMode": "heuristic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "error-handling-verifier"
-      ],
+      "implementedBy": ["error-handling-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/errors-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/errors-bad.ts"
-        ]
+        "good": ["ai/examples/rules/errors-good.ts"],
+        "bad": ["ai/examples/rules/errors-bad.ts"]
       }
     },
     {
@@ -937,24 +692,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "error-handling-verifier"
-      ],
+      "implementedBy": ["error-handling-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/errors-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/errors-bad.ts"
-        ]
+        "good": ["ai/examples/rules/errors-good.ts"],
+        "bad": ["ai/examples/rules/errors-bad.ts"]
       }
     },
     {
@@ -967,24 +712,14 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "error-handling-verifier"
-      ],
+      "implementedBy": ["error-handling-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/errors-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/errors-bad.ts"
-        ]
+        "good": ["ai/examples/rules/errors-good.ts"],
+        "bad": ["ai/examples/rules/errors-bad.ts"]
       }
     },
     {
@@ -997,24 +732,14 @@
       "verificationMode": "heuristic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "error-handling-verifier"
-      ],
+      "implementedBy": ["error-handling-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/errors-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/errors-bad.ts"
-        ]
+        "good": ["ai/examples/rules/errors-good.ts"],
+        "bad": ["ai/examples/rules/errors-bad.ts"]
       }
     },
     {
@@ -1027,20 +752,11 @@
       "verificationMode": "audit",
       "verificationSource": "git-diff",
       "blocking": true,
-      "implementedBy": [
-        "change-audit-verifier"
-      ],
+      "implementedBy": ["change-audit-verifier"],
       "requiresContext": "changed-files",
       "confidence": "medium",
-      "appliesTo": [
-        "AGENTS.md",
-        "ai/*.md",
-        "ai/contract.json",
-        "tooling config files"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["AGENTS.md", "ai/*.md", "ai/contract.json", "tooling config files"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1056,25 +772,14 @@
       "verificationMode": "audit",
       "verificationSource": "git-diff",
       "blocking": true,
-      "implementedBy": [
-        "testing-verifier"
-      ],
+      "implementedBy": ["testing-verifier"],
       "requiresContext": "changed-files",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
-        "good": [
-          "ai/examples/rules/testing-good.ts"
-        ],
-        "bad": [
-          "ai/examples/rules/testing-bad.ts"
-        ]
+        "good": ["ai/examples/rules/testing-good.ts"],
+        "bad": ["ai/examples/rules/testing-bad.ts"]
       }
     },
     {
@@ -1087,17 +792,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "testing-verifier"
-      ],
+      "implementedBy": ["testing-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1113,17 +812,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "testing-verifier"
-      ],
+      "implementedBy": ["testing-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1139,18 +832,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "text",
       "blocking": true,
-      "implementedBy": [
-        "testing-verifier"
-      ],
+      "implementedBy": ["testing-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "src/**/*.ts",
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts", "test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1166,17 +852,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "testing-verifier"
-      ],
+      "implementedBy": ["testing-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "test/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["test/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1192,17 +872,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "readme",
       "blocking": true,
-      "implementedBy": [
-        "readme-verifier"
-      ],
+      "implementedBy": ["readme-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "README.md"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["README.md"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1218,17 +892,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "readme",
       "blocking": true,
-      "implementedBy": [
-        "readme-verifier"
-      ],
+      "implementedBy": ["readme-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "README.md"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["README.md"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1244,18 +912,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "readme-verifier"
-      ],
+      "implementedBy": ["readme-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "README.md",
-        "src/config.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["README.md", "src/config.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1271,17 +932,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "readme",
       "blocking": true,
-      "implementedBy": [
-        "readme-verifier"
-      ],
+      "implementedBy": ["readme-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "README.md"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["README.md"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1297,17 +952,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "package-json",
       "blocking": true,
-      "implementedBy": [
-        "tooling-verifier"
-      ],
+      "implementedBy": ["tooling-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "package.json"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["package.json"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1323,17 +972,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "package-json",
       "blocking": true,
-      "implementedBy": [
-        "tooling-verifier"
-      ],
+      "implementedBy": ["tooling-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "package.json"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["package.json"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1349,19 +992,11 @@
       "verificationMode": "deterministic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "tooling-verifier"
-      ],
+      "implementedBy": ["tooling-verifier"],
       "requiresContext": "full-project",
       "confidence": "high",
-      "appliesTo": [
-        "package.json",
-        "biome.json",
-        "tsconfig.json"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["package.json", "biome.json", "tsconfig.json"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1377,17 +1012,11 @@
       "verificationMode": "audit",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "change-audit-verifier"
-      ],
+      "implementedBy": ["change-audit-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1403,17 +1032,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "change-audit-verifier"
-      ],
+      "implementedBy": ["change-audit-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1429,17 +1052,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "change-audit-verifier"
-      ],
+      "implementedBy": ["change-audit-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1455,17 +1072,11 @@
       "verificationMode": "heuristic",
       "verificationSource": "ast",
       "blocking": true,
-      "implementedBy": [
-        "typescript-style-verifier"
-      ],
+      "implementedBy": ["typescript-style-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
@@ -1481,17 +1092,11 @@
       "verificationMode": "audit",
       "verificationSource": "combined",
       "blocking": true,
-      "implementedBy": [
-        "change-audit-verifier"
-      ],
+      "implementedBy": ["change-audit-verifier"],
       "requiresContext": "full-project",
       "confidence": "medium",
-      "appliesTo": [
-        "src/**/*.ts"
-      ],
-      "enforcedBy": [
-        "verify"
-      ],
+      "appliesTo": ["src/**/*.ts"],
+      "enforcedBy": ["verify"],
       "examples": {
         "good": [],
         "bad": []
