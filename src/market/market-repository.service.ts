@@ -112,6 +112,29 @@ export class MarketRepositoryService {
     return marketRecord;
   }
 
+  private shouldBackfillPriceToBeat(marketRecord: MarketRecord, marketSnapshotRecord: MarketSnapshotRecord): boolean {
+    const shouldBackfill = marketRecord.priceToBeat === null && marketSnapshotRecord.priceToBeat !== null;
+    return shouldBackfill;
+  }
+
+  private async backfillPriceToBeat(marketRecord: MarketRecord, marketSnapshotRecord: MarketSnapshotRecord): Promise<MarketRecord> {
+    const nextPriceToBeat = marketSnapshotRecord.priceToBeat;
+    if (nextPriceToBeat !== null) {
+      await this.clickhouseClientService.command(`
+        ALTER TABLE ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_MARKET_TABLE}
+        UPDATE price_to_beat = ${nextPriceToBeat}
+        WHERE slug = ${this.buildSqlStringLiteral(marketRecord.slug)}
+          AND isNull(price_to_beat)
+      `);
+    }
+    const nextMarketRecord: MarketRecord = {
+      ...marketRecord,
+      priceToBeat: nextPriceToBeat,
+    };
+    this.cachedMarketRecordBySlug.set(nextMarketRecord.slug, nextMarketRecord);
+    return nextMarketRecord;
+  }
+
   /**
    * @section public:methods
    */
@@ -123,6 +146,9 @@ export class MarketRepositoryService {
     }
     if (marketRecord === null) {
       marketRecord = await this.insertMarketRecord(marketSnapshotRecord);
+    }
+    if (marketRecord !== null && this.shouldBackfillPriceToBeat(marketRecord, marketSnapshotRecord)) {
+      marketRecord = await this.backfillPriceToBeat(marketRecord, marketSnapshotRecord);
     }
     return marketRecord;
   }

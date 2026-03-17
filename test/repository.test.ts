@@ -198,6 +198,42 @@ test("MarketSyncService stores a new slug once and uses snapshot metadata only",
   assert.equal((ensuredMarkets[0] as { marketStart: string }).marketStart, "2026-03-11T10:00:00.000Z");
 });
 
+test("MarketRepositoryService backfills priceToBeat only when stored value is null", async () => {
+  const driverDouble = buildDriverDouble();
+  const clickhouseClientService = new ClickhouseClientService({
+    clickhouseDriver: driverDouble.clickhouseDriver,
+    databaseName: "default",
+  });
+  const marketRepositoryService = new (await import("../src/market/market-repository.service.ts")).MarketRepositoryService({
+    clickhouseClientService,
+  });
+  const lookupQuery = `
+      SELECT slug, asset, window, price_to_beat, market_start, market_end
+      FROM default.market
+      WHERE slug = 'btc-5m'
+      ORDER BY market_start ASC
+      LIMIT 1
+    `;
+  driverDouble.queryResults.set(lookupQuery, [
+    {
+      slug: "btc-5m",
+      asset: "btc",
+      window: "5m",
+      price_to_beat: null,
+      market_start: "2026-03-11 10:00:00.000",
+      market_end: "2026-03-11 10:05:00.000",
+    },
+  ]);
+
+  const marketRecord = await marketRepositoryService.ensureMarketStored(MARKET_RECORD);
+  await marketRepositoryService.ensureMarketStored({ ...MARKET_RECORD, priceToBeat: 200 });
+
+  assert.equal(marketRecord.priceToBeat, 100);
+  assert.equal(driverDouble.commands.length, 1);
+  assert.match(driverDouble.commands[0] || "", /ALTER TABLE default\.market/);
+  assert.match(driverDouble.commands[0] || "", /UPDATE price_to_beat = 100/);
+});
+
 test("SnapshotQueryService lists markets and reads snapshots with marketSlug", async () => {
   const capturedSnapshotReads: Array<{ fromDate: string; toDate: string; limit: number; marketSlug: string | null }> = [];
   const snapshotQueryService = new SnapshotQueryService({
