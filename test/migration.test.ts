@@ -66,7 +66,7 @@ test("MigrationRepositoryService generates migration SQL with market joins and m
 
   await migrationRepositoryService.migrateDay("2026-03-11");
 
-  assert.match(driverDouble.commands[0] || "", /DROP PARTITION/);
+  assert.match(driverDouble.commands[0] || "", /DROP PARTITION '2026-03-11'/);
   assert.match(driverDouble.commands[1] || "", /LEFT JOIN default\.market/);
   assert.match(driverDouble.commands[1] || "", /btc_5m_market_start/);
   assert.match(driverDouble.commands[1] || "", /btc_5m_price_to_beat/);

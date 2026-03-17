@@ -192,7 +192,7 @@ export class MigrationRepositoryService {
     const snapshotFieldSelectClauses = this.buildSnapshotFieldSelectClauses().join(",\n        ");
     await this.clickhouseClientService.command(`
       ALTER TABLE ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_SNAPSHOT_TABLE}
-      DROP PARTITION toDate(${this.buildSqlStringLiteral(day)})
+      DROP PARTITION ${this.buildSqlStringLiteral(day)}
     `);
     await this.clickhouseClientService.command(`
       INSERT INTO ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_SNAPSHOT_TABLE}
