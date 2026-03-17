@@ -198,6 +198,31 @@ test("MarketSyncService stores a new slug once and uses snapshot metadata only",
   assert.equal((ensuredMarkets[0] as { marketStart: string }).marketStart, "2026-03-11T10:00:00.000Z");
 });
 
+test("MarketSyncService retries the same slug until priceToBeat is first populated", async () => {
+  const ensuredMarkets: Array<{ priceToBeat: number | null }> = [];
+  const marketSyncService = new MarketSyncService({
+    marketRepositoryService: {
+      async ensureMarketStored(marketSnapshotRecord: { priceToBeat: number | null }) {
+        ensuredMarkets.push(marketSnapshotRecord);
+        return {
+          ...MARKET_RECORD,
+          priceToBeat: marketSnapshotRecord.priceToBeat,
+        };
+      },
+    } as never,
+    snapshotFieldCatalogService: SnapshotFieldCatalogService.createDefault(),
+  });
+
+  await marketSyncService.syncSnapshot(buildSnapshot({ btc_5m_price_to_beat: null }));
+  await marketSyncService.syncSnapshot(buildSnapshot({ btc_5m_price_to_beat: 100 }));
+  await marketSyncService.syncSnapshot(buildSnapshot({ btc_5m_price_to_beat: 101 }));
+
+  assert.deepEqual(
+    ensuredMarkets.map((marketSnapshotRecord) => marketSnapshotRecord.priceToBeat),
+    [null, 100],
+  );
+});
+
 test("MarketRepositoryService backfills priceToBeat only when stored value is null", async () => {
   const driverDouble = buildDriverDouble();
   const clickhouseClientService = new ClickhouseClientService({

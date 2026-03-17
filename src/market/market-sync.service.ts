@@ -34,6 +34,7 @@ export class MarketSyncService {
   private readonly marketRepositoryService: MarketRepositoryService;
   private readonly snapshotFieldCatalogService: SnapshotFieldCatalogService;
   private readonly cachedSlugByPairKey = new Map<string, string>();
+  private readonly cachedHasPriceToBeatByPairKey = new Map<string, boolean>();
 
   /**
    * @section constructor
@@ -74,6 +75,13 @@ export class MarketSyncService {
     return numberValue;
   }
 
+  private shouldStoreMarket(pairKey: string, slug: string | null, priceToBeat: number | null): boolean {
+    const cachedSlug = this.cachedSlugByPairKey.get(pairKey) || null;
+    const hasCachedPriceToBeat = this.cachedHasPriceToBeatByPairKey.get(pairKey) || false;
+    const shouldStore = slug !== null && (slug !== cachedSlug || (slug === cachedSlug && !hasCachedPriceToBeat && priceToBeat !== null));
+    return shouldStore;
+  }
+
   private buildMarketSnapshotRecord(snapshot: Snapshot, asset: "btc" | "eth" | "sol" | "xrp", window: "5m" | "15m"): MarketSnapshotRecord | null {
     const pairPrefix = this.snapshotFieldCatalogService.readPairPrefix(asset, window);
     const slug = this.readSnapshotString(snapshot, `${pairPrefix}_slug`);
@@ -108,15 +116,16 @@ export class MarketSyncService {
         const pairKey = this.buildPairKey(supportedAsset, supportedWindow);
         const pairPrefix = this.snapshotFieldCatalogService.readPairPrefix(supportedAsset, supportedWindow);
         const slug = this.readSnapshotString(snapshot, `${pairPrefix}_slug`);
-        const cachedSlug = this.cachedSlugByPairKey.get(pairKey) || null;
-        const shouldStoreMarket = slug !== null && slug !== cachedSlug;
+        const priceToBeat = this.readSnapshotNumber(snapshot, `${pairPrefix}_price_to_beat`);
+        const shouldStoreMarket = this.shouldStoreMarket(pairKey, slug, priceToBeat);
         if (shouldStoreMarket) {
           const marketSnapshotRecord = this.buildMarketSnapshotRecord(snapshot, supportedAsset, supportedWindow);
           if (marketSnapshotRecord === null) {
-            this.warnMissingMarketMetadata(supportedAsset, supportedWindow, slug);
+            this.warnMissingMarketMetadata(supportedAsset, supportedWindow, slug || "");
           } else {
-            await this.marketRepositoryService.ensureMarketStored(marketSnapshotRecord);
-            this.cachedSlugByPairKey.set(pairKey, slug);
+            const marketRecord = await this.marketRepositoryService.ensureMarketStored(marketSnapshotRecord);
+            this.cachedSlugByPairKey.set(pairKey, marketSnapshotRecord.slug);
+            this.cachedHasPriceToBeatByPairKey.set(pairKey, marketRecord.priceToBeat !== null);
           }
         }
       }
