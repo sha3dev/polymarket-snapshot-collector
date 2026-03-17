@@ -14,6 +14,8 @@ type MigrationOrchestratorServiceOptions = {
   isMigrationMode: boolean;
 };
 
+const PROGRESS_LOG_INTERVAL_MS = 60_000;
+
 /**
  * @section class
  */
@@ -26,6 +28,7 @@ export class MigrationOrchestratorService {
   private readonly migrationRepositoryService: MigrationRepositoryService;
   private readonly isMigrationMode: boolean;
   private activeMigrationPromise: Promise<void> | null = null;
+  private progressLogTimer: NodeJS.Timeout | null = null;
 
   /**
    * @section constructor
@@ -94,7 +97,36 @@ export class MigrationOrchestratorService {
     }
   }
 
+  private startProgressLogTimer(): void {
+    if (this.progressLogTimer === null) {
+      this.progressLogTimer = setInterval(() => {
+        void this.runProgressLogTick();
+      }, PROGRESS_LOG_INTERVAL_MS);
+    }
+  }
+
+  private stopProgressLogTimer(): void {
+    if (this.progressLogTimer !== null) {
+      clearInterval(this.progressLogTimer);
+      this.progressLogTimer = null;
+    }
+  }
+
+  private async runProgressLogTick(): Promise<void> {
+    try {
+      const latestMigrationState = await this.migrationRepositoryService.readLatestMigrationState();
+      const progressMessage =
+        latestMigrationState === null
+          ? "snapshot legacy migration progress: phase=starting lastCompletedDay=null isCompleted=0 error=null"
+          : `snapshot legacy migration progress: phase=${latestMigrationState.phase} lastCompletedDay=${latestMigrationState.lastCompletedDay || "null"} isCompleted=${latestMigrationState.isCompleted ? "1" : "0"} error=${latestMigrationState.errorMessage || "null"}`;
+      LOGGER.info(progressMessage);
+    } catch (error) {
+      LOGGER.error(`snapshot legacy migration progress log failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private async runMigrationLoop(): Promise<void> {
+    this.startProgressLogTimer();
     try {
       await this.migrationRepositoryService.insertMigrationState("idle", null, false, null);
       await this.migratePendingDays();
@@ -103,6 +135,8 @@ export class MigrationOrchestratorService {
       await this.migrationRepositoryService.insertMigrationState("failed", null, false, errorMessage);
       LOGGER.error(`snapshot legacy migration failed: ${errorMessage}`);
       throw error;
+    } finally {
+      this.stopProgressLogTimer();
     }
   }
 

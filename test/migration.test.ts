@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import type { CommandParams, InsertParams } from "@clickhouse/client";
 import { ClickhouseClientService } from "../src/clickhouse/clickhouse-client.service.ts";
+import LOGGER from "../src/logger.ts";
 import { MigrationOrchestratorService } from "../src/migration/migration-orchestrator.service.ts";
 import { MigrationRepositoryService } from "../src/migration/migration-repository.service.ts";
 import { SnapshotFieldCatalogService } from "../src/snapshot/snapshot-field-catalog.service.ts";
@@ -147,4 +148,53 @@ test("MigrationOrchestratorService migrates day by day and resumes from last com
   assert.match(operations.join("|"), /migrate:2026-03-10/);
   assert.match(operations.join("|"), /migrate:2026-03-11/);
   assert.match(operations.join("|"), /state:completed:2026-03-11:1/);
+});
+
+test("MigrationOrchestratorService logs progress while migration is running", async () => {
+  const loggedMessages: string[] = [];
+  const realInfo = LOGGER.info.bind(LOGGER);
+  const realSetInterval = global.setInterval;
+  const realClearInterval = global.clearInterval;
+  let intervalListener = (): void => {
+    throw new Error("interval listener was not registered");
+  };
+  (LOGGER.info as unknown as (message: string) => void) = (message: string): void => {
+    loggedMessages.push(message);
+  };
+  global.setInterval = ((listener: () => void) => {
+    intervalListener = listener;
+    return 1 as unknown as NodeJS.Timeout;
+  }) as typeof global.setInterval;
+  global.clearInterval = (() => undefined) as typeof global.clearInterval;
+  const migrationOrchestratorService = new MigrationOrchestratorService({
+    isMigrationMode: true,
+    migrationRepositoryService: {
+      async insertMigrationState() {},
+      async readLatestMigrationState() {
+        return {
+          migrationName: "snapshot_v2_backfill",
+          phase: "running",
+          lastCompletedDay: "2026-03-10",
+          isCompleted: false,
+          errorMessage: null,
+          updatedAt: "2026-03-11T00:00:00.000Z",
+        };
+      },
+      async readLegacySnapshotRange() {
+        return { minDay: null, maxDay: null };
+      },
+    } as never,
+  });
+
+  try {
+    migrationOrchestratorService.start();
+    intervalListener();
+    await Promise.resolve();
+    assert.match(loggedMessages[0] || "", /snapshot legacy migration progress: phase=running/);
+  } finally {
+    await migrationOrchestratorService.stop();
+    LOGGER.info = realInfo;
+    global.setInterval = realSetInterval;
+    global.clearInterval = realClearInterval;
+  }
 });
