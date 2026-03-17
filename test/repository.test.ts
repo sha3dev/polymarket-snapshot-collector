@@ -119,7 +119,7 @@ test("SnapshotFieldCatalogService includes price_to_beat and market date fields"
   assert.ok(snapshotColumnDefinitions.includes("btc_5m_market_start Nullable(DateTime64(3, 'UTC'))"));
 });
 
-test("ClickhouseSchemaService creates market, legacy, flat snapshot, and migration tables", async () => {
+test("ClickhouseSchemaService creates market and flat snapshot tables", async () => {
   const driverDouble = buildDriverDouble();
   const clickhouseClientService = new ClickhouseClientService({
     clickhouseDriver: driverDouble.clickhouseDriver,
@@ -132,9 +132,9 @@ test("ClickhouseSchemaService creates market, legacy, flat snapshot, and migrati
 
   await clickhouseSchemaService.ensureSchema();
 
-  assert.equal(driverDouble.commands.length, 4);
+  assert.equal(driverDouble.commands.length, 2);
   assert.match(driverDouble.commands[0] || "", /CREATE TABLE IF NOT EXISTS default\.market/);
-  assert.match(driverDouble.commands[2] || "", /btc_5m_market_start Nullable\(DateTime64\(3, 'UTC'\)\)/);
+  assert.match(driverDouble.commands[1] || "", /btc_5m_market_start Nullable\(DateTime64\(3, 'UTC'\)\)/);
 });
 
 test("FlatSnapshotRepositoryService inserts flat snapshots with id and inserted_at", async () => {

@@ -20,17 +20,16 @@ Use this service when you want one collector process that:
 
 - receives the full upstream flat snapshot contract,
 - stores it as one ClickHouse row per instant,
-- preserves the legacy historical model through a first-boot migration,
-- and exposes one simple read API instead of rebuilding market-specific snapshot tables.
+- keeps a small market catalog for discovery,
+- and exposes one simple range API for historical reads.
 
 ## Main Capabilities
 
-- Creates the `market`, legacy `snapshot`, `snapshot_v2`, and `migration_state` tables on startup when they do not exist.
-- Subscribes to `@sha3/polymarket-snapshot` and batch-inserts flat snapshots into `snapshot_v2`.
+- Creates the `market` and `snapshot` tables on startup when they do not exist.
+- Subscribes to `@sha3/polymarket-snapshot` and batch-inserts flat snapshots into `snapshot`.
 - Stores one catalog row per discovered live market slug in `market`.
 - Exposes `GET /markets` for market discovery.
 - Exposes `GET /snapshots` for historical range reads, optionally filtered by `marketSlug`.
-- Supports `npm run migrate`, which starts the service normally and backfills legacy rows into `snapshot_v2` in the background.
 
 ## Installation
 
@@ -52,16 +51,8 @@ CLICKHOUSE_DATABASE=default
 
 ## Running Locally
 
-Normal runtime:
-
 ```bash
 npm run start
-```
-
-Runtime with first-boot migration enabled:
-
-```bash
-npm run migrate
 ```
 
 Default bind:
@@ -70,21 +61,12 @@ Default bind:
 
 ## Usage
 
-Start the normal runtime:
+Start the runtime:
 
 ```ts
 import { ServiceRuntime } from "@sha3/polymarket-snapshot-collector";
 
 const serviceRuntime = ServiceRuntime.createDefault();
-await serviceRuntime.startServer();
-```
-
-Start the runtime with background legacy migration:
-
-```ts
-import { ServiceRuntime } from "@sha3/polymarket-snapshot-collector";
-
-const serviceRuntime = ServiceRuntime.createMigrationRuntime();
 await serviceRuntime.startServer();
 ```
 
@@ -155,12 +137,6 @@ Returns:
 }
 ```
 
-Behavior notes:
-
-- returns one lightweight row per discovered slug
-- does not expose market ids or condition ids
-- reads only from the `market` catalog table
-
 ### `GET /snapshots`
 
 Query params:
@@ -216,14 +192,6 @@ Returns:
 
 - `ServiceRuntime`
 
-#### `createMigrationRuntime()`
-
-Builds the runtime wiring with background legacy migration enabled.
-
-Returns:
-
-- `ServiceRuntime`
-
 #### `buildServer()`
 
 Builds the Node HTTP server without binding a port.
@@ -234,7 +202,7 @@ Returns:
 
 #### `startServer()`
 
-Creates schema, starts the collector, starts listening, and launches background migration when the runtime was created with `createMigrationRuntime()`.
+Creates schema, starts the collector, and starts listening.
 
 Returns:
 
@@ -242,7 +210,7 @@ Returns:
 
 #### `stop()`
 
-Stops the HTTP server, collector, migration task, and ClickHouse client.
+Stops the HTTP server, collector, and ClickHouse client.
 
 Returns:
 
@@ -303,7 +271,7 @@ type SnapshotRangePayload = {
 
 ## Storage Model
 
-### `snapshot_v2`
+### `snapshot`
 
 Primary table for the flat upstream snapshot contract.
 
@@ -318,31 +286,9 @@ Lightweight discovery table.
 - one row per discovered slug
 - stores `slug`, `asset`, `window`, `price_to_beat`, `market_start`, `market_end`
 
-### `snapshot`
-
-Legacy table kept only as the migration source.
-
-### `migration_state`
-
-Temporary state table used to resume the first historical backfill.
-
-## Migration
-
-`npm run migrate` does two things at the same time:
-
-1. starts the service normally,
-2. backfills historical legacy `snapshot` rows into `snapshot_v2` in the background.
-
-Migration behavior:
-
-- reads only legacy rows with `generated_at` strictly before the current UTC day
-- converts old per-pair rows into one flat row per `generated_at`
-- joins legacy `market` rows only to recover `price_to_beat`, `market_start`, and `market_end`
-- resumes from `migration_state` after restart
-
 ## Configuration
 
-Configuration lives in [`src/config.ts`](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/config.ts).
+Configuration lives in [src/config.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/config.ts).
 
 - `RESPONSE_CONTENT_TYPE`: HTTP response `content-type` header.
 - `HTTP_HOST`: interface used by the HTTP server.
@@ -353,9 +299,7 @@ Configuration lives in [`src/config.ts`](/Users/jc/Documents/GitHub/polymarket-s
 - `CLICKHOUSE_PASSWORD`: ClickHouse password.
 - `CLICKHOUSE_DATABASE`: ClickHouse database name.
 - `CLICKHOUSE_MARKET_TABLE`: table name for the lightweight market catalog.
-- `CLICKHOUSE_LEGACY_SNAPSHOT_TABLE`: legacy snapshot table name used as migration source.
 - `CLICKHOUSE_SNAPSHOT_TABLE`: flat snapshot target table name.
-- `CLICKHOUSE_MIGRATION_STATE_TABLE`: migration state table name.
 - `SUPPORTED_ASSETS`: comma-separated supported assets list.
 - `SUPPORTED_WINDOWS`: comma-separated supported market windows list.
 - `SNAPSHOT_INTERVAL_MS`: polling interval passed to `@sha3/polymarket-snapshot`.
@@ -365,7 +309,6 @@ Configuration lives in [`src/config.ts`](/Users/jc/Documents/GitHub/polymarket-s
 ## Scripts
 
 - `npm run start`: start the service runtime
-- `npm run migrate`: start the service runtime with background legacy migration
 - `npm run build`: compile to `dist/`
 - `npm run standards:check`: run `code-standards verify`
 - `npm run lint`: run Biome checks
@@ -384,8 +327,6 @@ Configuration lives in [`src/config.ts`](/Users/jc/Documents/GitHub/polymarket-s
 - [src/market/market-sync.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/market/market-sync.service.ts): market discovery from incoming snapshots
 - [src/snapshot/flat-snapshot-repository.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/snapshot/flat-snapshot-repository.service.ts): flat snapshot persistence and reads
 - [src/snapshot/snapshot-query.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/snapshot/snapshot-query.service.ts): query use cases
-- [src/migration/migration-repository.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/migration/migration-repository.service.ts): SQL-first legacy migration
-- [src/migration/migration-orchestrator.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/migration/migration-orchestrator.service.ts): resumable migration orchestration
 - [src/http/http-server.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/http/http-server.service.ts): HTTP API
 - [src/app/service-runtime.service.ts](/Users/jc/Documents/GitHub/polymarket-snapshot-collector/src/app/service-runtime.service.ts): runtime composition
 
@@ -404,13 +345,8 @@ Verify:
 
 The catalog is populated only when incoming snapshots include live slug, start, and end fields for a pair.
 
-### Migration not progressing
-
-Check the `migration_state` table and the service logs. The migration skips the current UTC day by design.
-
 ## AI Workflow
 
 - Read `AGENTS.md`, `ai/contract.json`, and the relevant `ai/<assistant>.md` before editing.
 - Keep managed files read-only unless the task explicitly requires a standards update.
-- Treat the legacy code under `.code-standards/refactor-source/` as reference only.
 - Run `npm run standards:check` and `npm run check` before finishing.

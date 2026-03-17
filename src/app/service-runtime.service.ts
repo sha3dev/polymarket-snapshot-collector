@@ -17,8 +17,6 @@ import { HttpServerService } from "../http/http-server.service.ts";
 import LOGGER from "../logger.ts";
 import { MarketRepositoryService } from "../market/market-repository.service.ts";
 import { MarketSyncService } from "../market/market-sync.service.ts";
-import { MigrationOrchestratorService } from "../migration/migration-orchestrator.service.ts";
-import { MigrationRepositoryService } from "../migration/migration-repository.service.ts";
 import { FlatSnapshotRepositoryService } from "../snapshot/flat-snapshot-repository.service.ts";
 import { SnapshotFieldCatalogService } from "../snapshot/snapshot-field-catalog.service.ts";
 import { SnapshotQueryService } from "../snapshot/snapshot-query.service.ts";
@@ -31,7 +29,6 @@ type ServiceRuntimeOptions = {
   clickhouseClientService: ClickhouseClientService;
   clickhouseSchemaService: ClickhouseSchemaService;
   snapshotCollectorService: SnapshotCollectorService;
-  migrationOrchestratorService: MigrationOrchestratorService;
   httpServerService: HttpServerService;
 };
 
@@ -47,7 +44,6 @@ export class ServiceRuntime {
   private readonly clickhouseClientService: ClickhouseClientService;
   private readonly clickhouseSchemaService: ClickhouseSchemaService;
   private readonly snapshotCollectorService: SnapshotCollectorService;
-  private readonly migrationOrchestratorService: MigrationOrchestratorService;
   private readonly httpServerService: HttpServerService;
   private activeServer: Server | null = null;
 
@@ -59,7 +55,6 @@ export class ServiceRuntime {
     this.clickhouseClientService = options.clickhouseClientService;
     this.clickhouseSchemaService = options.clickhouseSchemaService;
     this.snapshotCollectorService = options.snapshotCollectorService;
-    this.migrationOrchestratorService = options.migrationOrchestratorService;
     this.httpServerService = options.httpServerService;
   }
 
@@ -68,16 +63,11 @@ export class ServiceRuntime {
    */
 
   public static createDefault(): ServiceRuntime {
-    const serviceRuntime = ServiceRuntime.createRuntime(false);
+    const serviceRuntime = ServiceRuntime.createRuntime();
     return serviceRuntime;
   }
 
-  public static createMigrationRuntime(): ServiceRuntime {
-    const serviceRuntime = ServiceRuntime.createRuntime(true);
-    return serviceRuntime;
-  }
-
-  private static createRuntime(isMigrationMode: boolean): ServiceRuntime {
+  private static createRuntime(): ServiceRuntime {
     const clickhouseClientService = ClickhouseClientService.createDefault();
     const snapshotFieldCatalogService = SnapshotFieldCatalogService.createDefault();
     const marketRepositoryService = new MarketRepositoryService({ clickhouseClientService });
@@ -89,10 +79,6 @@ export class ServiceRuntime {
       snapshotCollectorService: SnapshotCollectorService.createDefault({
         flatSnapshotRepositoryService,
         marketSyncService: MarketSyncService.createDefault({ marketRepositoryService, snapshotFieldCatalogService }),
-      }),
-      migrationOrchestratorService: new MigrationOrchestratorService({
-        migrationRepositoryService: new MigrationRepositoryService({ clickhouseClientService, snapshotFieldCatalogService }),
-        isMigrationMode,
       }),
       httpServerService: new HttpServerService({
         appInfoService: AppInfoService.createDefault(),
@@ -145,7 +131,6 @@ export class ServiceRuntime {
     const server = this.buildServer();
     const listenedServer = await this.listen(server);
     this.activeServer = listenedServer;
-    this.migrationOrchestratorService.start();
     LOGGER.info(`service listening on http://${config.HTTP_HOST}:${config.HTTP_PORT}`);
     return listenedServer;
   }
@@ -157,7 +142,6 @@ export class ServiceRuntime {
       this.activeServer = null;
     }
     await this.snapshotCollectorService.stop();
-    await this.migrationOrchestratorService.stop();
     await this.clickhouseClientService.close();
   }
 }

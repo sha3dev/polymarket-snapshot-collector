@@ -131,7 +131,7 @@ export class FlatSnapshotRepositoryService {
       try {
         await this.clickhouseClientService.insertJsonRows(config.CLICKHOUSE_SNAPSHOT_TABLE, insertRows);
       } catch (error) {
-        LOGGER.error(`snapshot_v2 batch insert failed for ${insertRows.length} row(s): ${error instanceof Error ? error.message : String(error)}`);
+        LOGGER.error(`snapshot batch insert failed for ${insertRows.length} row(s): ${error instanceof Error ? error.message : String(error)}`);
         throw error;
       }
     }
