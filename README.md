@@ -93,6 +93,12 @@ Read snapshots for a time range:
 curl "http://localhost:3000/snapshots?fromDate=2026-03-11T10:00:00.000Z&toDate=2026-03-11T10:15:00.000Z"
 ```
 
+Read snapshots from the oldest stored row up to a cutoff:
+
+```bash
+curl "http://localhost:3000/snapshots?toDate=2026-03-11T10:15:00.000Z"
+```
+
 Read only snapshots that include a specific market slug:
 
 ```bash
@@ -141,7 +147,7 @@ Returns:
 
 Query params:
 
-- `fromDate`: required ISO-8601 timestamp
+- `fromDate`: optional ISO-8601 timestamp. When omitted, the query starts at the oldest stored snapshot.
 - `toDate`: required ISO-8601 timestamp
 - `limit`: optional integer, default `1000`, max `5000`
 - `marketSlug`: optional non-empty slug string
@@ -171,6 +177,7 @@ Returns:
 Behavior notes:
 
 - rows are sorted ascending by `generated_at`
+- when `fromDate` is omitted, the lower date bound is not applied and the query starts from the oldest stored row
 - when `marketSlug` is present, the service returns only snapshots where any supported pair slug field equals that value
 - the response preserves upstream field names exactly
 
@@ -255,7 +262,7 @@ type StoredSnapshot = {
 
 ```ts
 type SnapshotRangePayload = {
-  fromDate: string;
+  fromDate: string | null;
   toDate: string;
   marketSlug: string | null;
   snapshots: StoredSnapshot[];

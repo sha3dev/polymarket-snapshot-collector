@@ -179,6 +179,28 @@ test("FlatSnapshotRepositoryService filters snapshots by marketSlug", async () =
   assert.match(driverDouble.queries[0] || "", /eth_15m_slug = 'btc-5m'/);
 });
 
+test("FlatSnapshotRepositoryService omits the lower date bound when fromDate is null", async () => {
+  const driverDouble = buildDriverDouble();
+  const clickhouseClientService = new ClickhouseClientService({
+    clickhouseDriver: driverDouble.clickhouseDriver,
+    databaseName: "default",
+  });
+  const flatSnapshotRepositoryService = new FlatSnapshotRepositoryService({
+    clickhouseClientService,
+    snapshotFieldCatalogService: SnapshotFieldCatalogService.createDefault(),
+  });
+
+  await flatSnapshotRepositoryService.listSnapshots({
+    fromDate: null,
+    toDate: "2026-03-11T10:01:00.000Z",
+    limit: 25,
+    marketSlug: null,
+  });
+
+  assert.doesNotMatch(driverDouble.queries[0] || "", /generated_at >=/);
+  assert.match(driverDouble.queries[0] || "", /generated_at <=/);
+});
+
 test("MarketSyncService stores a new slug once and uses snapshot metadata only", async () => {
   const ensuredMarkets: unknown[] = [];
   const marketSyncService = new MarketSyncService({
@@ -260,7 +282,7 @@ test("MarketRepositoryService backfills priceToBeat only when stored value is nu
 });
 
 test("SnapshotQueryService lists markets and reads snapshots with marketSlug", async () => {
-  const capturedSnapshotReads: Array<{ fromDate: string; toDate: string; limit: number; marketSlug: string | null }> = [];
+  const capturedSnapshotReads: Array<{ fromDate: string | null; toDate: string; limit: number; marketSlug: string | null }> = [];
   const snapshotQueryService = new SnapshotQueryService({
     marketRepositoryService: {
       async listMarkets() {
@@ -268,7 +290,7 @@ test("SnapshotQueryService lists markets and reads snapshots with marketSlug", a
       },
     } as never,
     flatSnapshotRepositoryService: {
-      async listSnapshots(options: { fromDate: string; toDate: string; limit: number; marketSlug: string | null }) {
+      async listSnapshots(options: { fromDate: string | null; toDate: string; limit: number; marketSlug: string | null }) {
         capturedSnapshotReads.push(options);
         return [
           {

@@ -8,7 +8,7 @@ import type { MarketListPayload, SnapshotRangePayload } from "../src/snapshot/sn
 
 type QueryServiceDouble = {
   listMarkets(options: { asset: string | null; window: string | null; fromDate: string | null }): Promise<MarketListPayload>;
-  readSnapshots(options: { fromDate: string; toDate: string; limit: number; marketSlug: string | null }): Promise<SnapshotRangePayload>;
+  readSnapshots(options: { fromDate: string | null; toDate: string; limit: number; marketSlug: string | null }): Promise<SnapshotRangePayload>;
 };
 
 function buildHttpServerService(queryServiceDouble: QueryServiceDouble): HttpServerService {
@@ -125,7 +125,7 @@ test("HttpServerService returns filtered markets", async () => {
 });
 
 test("HttpServerService serves flat snapshots by range and marketSlug", async () => {
-  const capturedOptions: Array<{ fromDate: string; toDate: string; limit: number; marketSlug: string | null }> = [];
+  const capturedOptions: Array<{ fromDate: string | null; toDate: string; limit: number; marketSlug: string | null }> = [];
   const httpServerService = buildHttpServerService({
     async listMarkets() {
       return { markets: [] };
@@ -152,6 +152,36 @@ test("HttpServerService serves flat snapshots by range and marketSlug", async ()
     },
   ]);
   assert.equal(json.marketSlug, "btc-5m");
+
+  await close(server);
+});
+
+test("HttpServerService serves flat snapshots from the oldest record when fromDate is omitted", async () => {
+  const capturedOptions: Array<{ fromDate: string | null; toDate: string; limit: number; marketSlug: string | null }> = [];
+  const httpServerService = buildHttpServerService({
+    async listMarkets() {
+      return { markets: [] };
+    },
+    async readSnapshots(options) {
+      capturedOptions.push(options);
+      return { ...buildSnapshotRangePayload(), fromDate: null, marketSlug: null };
+    },
+  });
+  const server = httpServerService.buildServer();
+  const port = await listen(server);
+  const response = await fetch(`http://127.0.0.1:${port}/snapshots?toDate=2026-03-11T10:01:00.000Z&limit=25`);
+  const json = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capturedOptions, [
+    {
+      fromDate: null,
+      toDate: "2026-03-11T10:01:00.000Z",
+      limit: 25,
+      marketSlug: null,
+    },
+  ]);
+  assert.equal(json.fromDate, null);
 
   await close(server);
 });

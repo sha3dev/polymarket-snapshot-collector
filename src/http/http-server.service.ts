@@ -30,7 +30,7 @@ type HttpServerServiceOptions = {
 
 type ErrorPayload = { error: string; message: string };
 type MappedError = { statusCode: number; payload: ErrorPayload };
-type SnapshotReadOptions = { fromDate: string; toDate: string; limit: number; marketSlug: string | null };
+type SnapshotReadOptions = { fromDate: string | null; toDate: string; limit: number; marketSlug: string | null };
 
 /**
  * @section class
@@ -115,9 +115,9 @@ export class HttpServerService {
   }
 
   private buildSnapshotReadOptions(searchParams: URLSearchParams): SnapshotReadOptions {
-    const fromDate = this.parseRequiredDate(searchParams, "fromDate");
+    const fromDate = this.parseOptionalDate(searchParams, "fromDate");
     const toDate = this.parseRequiredDate(searchParams, "toDate");
-    const hasInvalidDateRange = new Date(fromDate).getTime() > new Date(toDate).getTime();
+    const hasInvalidDateRange = fromDate !== null && new Date(fromDate).getTime() > new Date(toDate).getTime();
     if (hasInvalidDateRange) {
       throw new HttpRequestService(400, "invalid_request", "fromDate must be less than or equal to toDate");
     }

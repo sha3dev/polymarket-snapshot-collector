@@ -17,7 +17,7 @@ export type StoredSnapshot = {
 } & Record<string, SnapshotFieldValue>;
 
 export type SnapshotRangePayload = {
-  fromDate: string;
+  fromDate: string | null;
   toDate: string;
   marketSlug: string | null;
   snapshots: StoredSnapshot[];

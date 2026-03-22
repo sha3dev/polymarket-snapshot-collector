@@ -26,7 +26,7 @@ type FlatSnapshotRepositoryServiceOptions = {
 };
 
 type SnapshotReadOptions = {
-  fromDate: string;
+  fromDate: string | null;
   toDate: string;
   limit: number;
   marketSlug: string | null;
@@ -138,6 +138,11 @@ export class FlatSnapshotRepositoryService {
   }
 
   public async listSnapshots(options: SnapshotReadOptions): Promise<StoredSnapshot[]> {
+    const fromDateClause =
+      options.fromDate === null
+        ? ""
+        : `generated_at >= toDateTime64(${this.buildSqlStringLiteral(this.formatClickhouseDateTime(options.fromDate))}, 3, 'UTC')
+        AND `;
     const marketSlugClause =
       options.marketSlug === null
         ? ""
@@ -149,8 +154,7 @@ export class FlatSnapshotRepositoryService {
     const query = `
       SELECT ${snapshotSelectClause}
       FROM ${config.CLICKHOUSE_DATABASE}.${config.CLICKHOUSE_SNAPSHOT_TABLE}
-      WHERE generated_at >= toDateTime64(${this.buildSqlStringLiteral(this.formatClickhouseDateTime(options.fromDate))}, 3, 'UTC')
-        AND generated_at <= toDateTime64(${this.buildSqlStringLiteral(this.formatClickhouseDateTime(options.toDate))}, 3, 'UTC')
+      WHERE ${fromDateClause}generated_at <= toDateTime64(${this.buildSqlStringLiteral(this.formatClickhouseDateTime(options.toDate))}, 3, 'UTC')
         ${marketSlugClause}
       ORDER BY generated_at ASC, id ASC
       LIMIT ${options.limit}

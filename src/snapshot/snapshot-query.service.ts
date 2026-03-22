@@ -17,7 +17,7 @@ type SnapshotQueryServiceOptions = {
 };
 
 type SnapshotReadOptions = {
-  fromDate: string;
+  fromDate: string | null;
   toDate: string;
   limit: number;
   marketSlug: string | null;
